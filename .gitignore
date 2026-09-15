@@ -1,0 +1,30 @@
+# Dependências e build
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Segredos: nunca vão para o git
+.env*
+!.env.example
+
+# Dados reais: nunca vão para o git
+# (se um dia precisar de fixture fictícia nesses formatos, libere com "!tests/fixtures/**")
+*.xlsx
+*.xls
+*.csv
+*.pdf
+dados-reais/
+
+# Espaço de trabalho do Superpowers (ledger, briefs, relatórios) e worktrees
+.superpowers/
+.worktrees/
+
+# Vercel, logs e sistema
+.vercel/
+npm-debug.log*
+.DS_Store
+Thumbs.db

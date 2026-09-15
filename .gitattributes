@@ -1,0 +1,5 @@
+# Finais de linha iguais no Windows, no Linux do CI e na Vercel
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
