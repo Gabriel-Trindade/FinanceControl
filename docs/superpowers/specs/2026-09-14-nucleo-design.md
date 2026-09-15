@@ -105,9 +105,9 @@ Validadas com Zod ao iniciar: se faltar alguma, o app falha logo, com mensagem c
 
 | Nome | Conteúdo |
 |---|---|
-| `DATABASE_URL` | conexão Neon (injetada pela integração da Vercel) |
+| `DATABASE_URL` | conexão Neon: branch `dev` no `.env.local`, branch `main` nas variáveis de produção da Vercel |
 | `AUTH_USUARIO` | nome de usuário do dono |
-| `AUTH_SENHA_HASH` | hash scrypt da senha, gerado por `npm run senha:hash` |
+| `AUTH_SENHA_HASH` | hash scrypt da senha, gerado por `npm run credenciais` |
 | `AUTH_SEGREDO` | chave aleatória com ≥ 32 caracteres que assina o cookie de sessão |
 
 ### 5.4 Bibliotecas

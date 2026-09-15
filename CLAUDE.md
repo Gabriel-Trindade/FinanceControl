@@ -36,7 +36,7 @@ Criados pelo Plano 1. Enquanto a Tarefa 1 não rodar, o projeto ainda não tem `
 - `npm run typecheck`: checagem de tipos (`tsc --noEmit`)
 - `npm test`: testes (Vitest)
 - `npm run db:generate` / `npm run db:migrate`: gerar e aplicar migrações do banco
-- `npm run senha:hash`: gerar o hash da senha para o `.env`
+- `npm run credenciais`: gerar o hash da senha e o segredo da sessão para o `.env.local`
 
 ## Arquitetura (resumo)
 - `src/domain/`: regras puras, sem banco nem tela. Toda regra de negócio mora aqui, com teste.
