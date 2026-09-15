@@ -60,15 +60,20 @@ describe('lançamentos no banco', () => {
     })
   })
 
-  it('ordena por pessoa e, dentro da pessoa, pela ordem de criação', async () => {
+  it('ordena por pessoa em português e, dentro da pessoa, pela ordem de criação', async () => {
+    // "Bia" e o lançamento "B1" são criados ANTES de "Álvaro"/"AL1" (id maior), mas
+    // "Álvaro" precisa aparecer primeiro mesmo assim: prova que a ordem não vem do
+    // banco (collation "C" colocaria "Álvaro" depois de "Bia", por causa do acento).
     const bia = await obterOuCriarPessoa(db, 'Bia')
+    const alvaro = await obterOuCriarPessoa(db, 'Álvaro')
     await criarLancamento(db, novo({ pessoaId: bia.id, item: 'B1' }))
-    await criarLancamento(db, novo({ item: 'A1' }))
-    await criarLancamento(db, novo({ item: 'A2' }))
+    await criarLancamento(db, novo({ pessoaId: alvaro.id, item: 'AL1' }))
+    await criarLancamento(db, novo({ item: 'AN1' }))
+    await criarLancamento(db, novo({ item: 'AN2' }))
 
     const itens = (await listarLancamentosDoMes(db, '2026-09-01')).map((l) => l.item)
 
-    expect(itens).toEqual(['A1', 'A2', 'B1'])
+    expect(itens).toEqual(['AL1', 'AN1', 'AN2', 'B1'])
   })
 
   it('marca como recebidos só os que estão em aberto', async () => {

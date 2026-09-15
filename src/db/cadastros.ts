@@ -1,4 +1,5 @@
-import { asc, eq, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
+import { compararNomes } from '@/domain/texto'
 import { categorias, pessoas } from './schema'
 import type { Db } from './tipos'
 
@@ -10,19 +11,20 @@ export function normalizarNome(nome: string): string {
 }
 
 export async function listarPessoasAtivas(db: Db): Promise<ItemCadastro[]> {
-  return db
+  const linhas = await db
     .select({ id: pessoas.id, nome: pessoas.nome })
     .from(pessoas)
     .where(eq(pessoas.ativo, true))
-    .orderBy(asc(pessoas.nome))
+  // Ordenar aqui, não com ORDER BY: o banco usa collation "C" (ver src/domain/texto.ts).
+  return linhas.sort((a, b) => compararNomes(a.nome, b.nome))
 }
 
 export async function listarCategoriasAtivas(db: Db): Promise<ItemCadastro[]> {
-  return db
+  const linhas = await db
     .select({ id: categorias.id, nome: categorias.nome })
     .from(categorias)
     .where(eq(categorias.ativo, true))
-    .orderBy(asc(categorias.nome))
+  return linhas.sort((a, b) => compararNomes(a.nome, b.nome))
 }
 
 /**

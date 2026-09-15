@@ -45,13 +45,23 @@ describe('cadastros no banco', () => {
     await expect(obterOuCriarPessoa(db, '   ')).rejects.toThrow('Nome obrigatório')
   })
 
-  it('lista só as pessoas ativas, em ordem alfabética', async () => {
-    await obterOuCriarPessoa(db, 'Carlos')
-    const bia = await obterOuCriarPessoa(db, 'Bia')
+  it('lista só as pessoas ativas, em ordem alfabética em português', async () => {
+    // "Carlos" fica inativo no meio da lista; os outros provam que o banco (collation "C")
+    // não decide a ordem: "Álvaro" (acentuado) não pode ir para o fim, "bia" (minúsculo)
+    // não pode ir para o fim, e "Zé" precisa ficar depois de "bia" mesmo assim.
+    const carlos = await obterOuCriarPessoa(db, 'Carlos')
+    await obterOuCriarPessoa(db, 'Zé')
+    await obterOuCriarPessoa(db, 'bia')
     await obterOuCriarPessoa(db, 'Ana')
-    await db.update(pessoas).set({ ativo: false }).where(eq(pessoas.id, bia.id))
+    await obterOuCriarPessoa(db, 'Álvaro')
+    await db.update(pessoas).set({ ativo: false }).where(eq(pessoas.id, carlos.id))
 
-    expect((await listarPessoasAtivas(db)).map((p) => p.nome)).toEqual(['Ana', 'Carlos'])
+    expect((await listarPessoasAtivas(db)).map((p) => p.nome)).toEqual([
+      'Álvaro',
+      'Ana',
+      'bia',
+      'Zé',
+    ])
   })
 
   it('categorias seguem as mesmas regras', async () => {

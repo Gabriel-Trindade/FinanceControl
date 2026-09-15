@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Pagamento } from '@/domain/lancamento'
+import { compararNomes } from '@/domain/texto'
 import { categorias, lancamentos, pessoas } from './schema'
 import type { Db } from './tipos'
 
@@ -43,7 +44,7 @@ export async function criarLancamento(db: Db, dados: NovoLancamento): Promise<{ 
 }
 
 export async function listarLancamentosDoMes(db: Db, mesFatura: string): Promise<LancamentoDoMes[]> {
-  return db
+  const linhas = await db
     .select({
       id: lancamentos.id,
       mesFatura: lancamentos.mesFatura,
@@ -64,7 +65,11 @@ export async function listarLancamentosDoMes(db: Db, mesFatura: string): Promise
     .innerJoin(pessoas, eq(lancamentos.pessoaId, pessoas.id))
     .innerJoin(categorias, eq(lancamentos.categoriaId, categorias.id))
     .where(eq(lancamentos.mesFatura, mesFatura))
-    .orderBy(asc(pessoas.nome), asc(lancamentos.id))
+    // Só o desempate (ordem de criação) vem do SQL; o agrupamento por pessoa é feito
+    // abaixo, em JavaScript, porque o banco usa collation "C" (ver src/domain/texto.ts).
+    .orderBy(asc(lancamentos.id))
+  // Array.prototype.sort é estável: dentro da mesma pessoa, a ordem por id acima se mantém.
+  return linhas.sort((a, b) => compararNomes(a.pessoa, b.pessoa))
 }
 
 /** Um único UPDATE para todos os ids: o driver HTTP do Neon não faz transação interativa. */
