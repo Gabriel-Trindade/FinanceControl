@@ -19,5 +19,5 @@ const FORMATO_BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency
 export function formatarReais(centavos: number): string {
   // O Intl usa espaço não separável (U+00A0) depois de "R$"; trocamos por espaço comum
   // para o texto sair igual em testes, CSV e mensagens copiadas.
-  return FORMATO_BRL.format(centavos / 100).replace(/ /g, ' ')
+  return FORMATO_BRL.format(centavos / 100).replace(/\u00A0/g, ' ')
 }
