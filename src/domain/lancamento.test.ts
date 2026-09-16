@@ -3,6 +3,7 @@ import {
   calcularRestante,
   calcularSituacao,
   calcularSubtotal,
+  descreverParcela,
   ROTULO_SITUACAO,
   type DadosDaRegra,
 } from './lancamento'
@@ -76,5 +77,19 @@ describe('calcularRestante (R6)', () => {
 
   it('é zero na última parcela', () => {
     expect(calcularRestante({ ...base, parcelaAtual: 10 }, hoje)).toBe(0)
+  })
+})
+
+describe('descreverParcela', () => {
+  it('mostra "mensal" para gasto recorrente', () => {
+    expect(descreverParcela({ parcelaAtual: 1, qtdParcelas: null, recorrente: true })).toBe('mensal')
+  })
+
+  it('mostra "atual/quantidade" para compra parcelada', () => {
+    expect(descreverParcela({ parcelaAtual: 3, qtdParcelas: 10, recorrente: false })).toBe('3/10')
+  })
+
+  it('fica vazio para compra à vista', () => {
+    expect(descreverParcela({ parcelaAtual: 1, qtdParcelas: 1, recorrente: false })).toBe('')
   })
 })

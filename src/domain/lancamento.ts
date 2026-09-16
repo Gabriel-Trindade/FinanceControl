@@ -47,3 +47,12 @@ export function calcularRestante(l: DadosDaRegra, hoje: string): number {
   if (!mesmoMes(l.mesFatura, hoje)) return 0
   return (l.qtdParcelas - l.parcelaAtual) * l.valorCentavos
 }
+
+/** Texto curto da parcela para listas: "mensal", "3/10", ou nada para compra à vista. */
+export function descreverParcela(
+  l: Pick<DadosDaRegra, 'parcelaAtual' | 'qtdParcelas' | 'recorrente'>,
+): string {
+  if (l.recorrente) return 'mensal'
+  if (l.qtdParcelas === null || l.qtdParcelas <= 1) return ''
+  return `${l.parcelaAtual}/${l.qtdParcelas}`
+}
