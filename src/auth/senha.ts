@@ -33,6 +33,7 @@ export async function gerarHashSenha(senha: string): Promise<string> {
   ].join(':')
 }
 
+/** Confere a senha contra o hash salvo; hash malformado ou senha errada → false. */
 export async function verificarSenha(senha: string, hashSalvo: string): Promise<boolean> {
   const partes = hashSalvo.split(':')
   if (partes.length !== 6 || partes[0] !== PREFIXO) return false

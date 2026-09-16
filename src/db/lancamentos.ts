@@ -35,6 +35,7 @@ export type LancamentoDoMes = {
   pagoEm: string | null
 }
 
+/** Grava um lançamento digitado no site (fonte "manual") e devolve o id criado. */
 export async function criarLancamento(db: Db, dados: NovoLancamento): Promise<{ id: number }> {
   const [criado] = await db
     .insert(lancamentos)
@@ -43,6 +44,7 @@ export async function criarLancamento(db: Db, dados: NovoLancamento): Promise<{ 
   return criado
 }
 
+/** Lançamentos de uma fatura, com os nomes da pessoa e da categoria, ordenados por pessoa. */
 export async function listarLancamentosDoMes(db: Db, mesFatura: string): Promise<LancamentoDoMes[]> {
   const linhas = await db
     .select({

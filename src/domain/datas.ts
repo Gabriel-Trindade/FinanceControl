@@ -27,11 +27,13 @@ export function hojeEmSaoPaulo(agora: Date = new Date()): string {
   return `${pegar('year')}-${pegar('month')}-${pegar('day')}`
 }
 
+/** "2026-09-14" → "2026-09-01". */
 export function inicioDoMes(data: string): string {
   const { ano, mes } = separar(data)
   return montar(ano, mes, 1)
 }
 
+/** Soma (ou subtrai, com número negativo) meses a um mês de fatura "AAAA-MM-01". */
 export function somarMeses(mesFatura: string, quantidade: number): string {
   const { ano, mes } = separar(mesFatura)
   // Conta tudo em "meses desde o ano zero" para a virada de ano sair de graça.
@@ -39,6 +41,7 @@ export function somarMeses(mesFatura: string, quantidade: number): string {
   return montar(Math.floor(total / 12), (((total % 12) + 12) % 12) + 1, 1)
 }
 
+/** true quando as duas datas caem no mesmo mês do mesmo ano. */
 export function mesmoMes(a: string, b: string): boolean {
   return inicioDoMes(a) === inicioDoMes(b)
 }
@@ -56,6 +59,7 @@ export function formatarMesFatura(mesFatura: string): string {
   return `${MESES[mes - 1]}/${ano}`
 }
 
+/** Valor de um <input type="month"> ("2026-09") → mês da fatura ("2026-09-01"); inválido → null. */
 export function lerMes(texto: string): string | null {
   const partes = PADRAO_MES.exec(texto)
   if (!partes) return null
@@ -64,10 +68,12 @@ export function lerMes(texto: string): string | null {
   return `${partes[1]}-${partes[2]}-01`
 }
 
+/** Mês da fatura ("2026-09-01") → valor para <input type="month"> e URLs ("2026-09"). */
 export function mesParaTexto(mesFatura: string): string {
   return mesFatura.slice(0, 7)
 }
 
+/** true só para datas "AAAA-MM-DD" que existem no calendário (30/02 é recusado). */
 export function ehDataValida(texto: string): boolean {
   const partes = PADRAO_DATA.exec(texto)
   if (!partes) return false

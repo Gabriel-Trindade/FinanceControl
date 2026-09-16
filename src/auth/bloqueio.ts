@@ -9,6 +9,7 @@ const JANELA_MS = JANELA_MINUTOS * 60_000
 
 export type SituacaoBloqueio = { bloqueado: boolean; minutosRestantes: number }
 
+/** Guarda uma tentativa de login errada vinda deste IP. */
 export async function registrarFalha(db: Db, ip: string, agora: Date = new Date()): Promise<void> {
   await db.insert(tentativasLogin).values({ ip, criadoEm: agora })
 }
@@ -36,6 +37,7 @@ export async function consultarBloqueio(
   }
 }
 
+/** Apaga as falhas deste IP (chamado depois de um login certo). */
 export async function limparFalhas(db: Db, ip: string): Promise<void> {
   await db.delete(tentativasLogin).where(eq(tentativasLogin.ip, ip))
 }

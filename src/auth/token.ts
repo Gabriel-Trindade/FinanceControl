@@ -6,6 +6,7 @@ function chave(segredo: string): Uint8Array {
   return new TextEncoder().encode(segredo)
 }
 
+/** Cria o JWT da sessão do usuário, válido por 30 dias a partir de `agora`. */
 export async function criarTokenSessao(
   usuario: string,
   segredo: string,

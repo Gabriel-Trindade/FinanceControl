@@ -10,6 +10,7 @@ export function normalizarNome(nome: string): string {
   return nome.trim().replace(/\s+/g, ' ')
 }
 
+/** Pessoas que aparecem nas listas de escolha, em ordem alfabética. */
 export async function listarPessoasAtivas(db: Db): Promise<ItemCadastro[]> {
   const linhas = await db
     .select({ id: pessoas.id, nome: pessoas.nome })
@@ -19,6 +20,7 @@ export async function listarPessoasAtivas(db: Db): Promise<ItemCadastro[]> {
   return linhas.sort((a, b) => compararNomes(a.nome, b.nome))
 }
 
+/** Categorias que aparecem nas listas de escolha, em ordem alfabética. */
 export async function listarCategoriasAtivas(db: Db): Promise<ItemCadastro[]> {
   const linhas = await db
     .select({ id: categorias.id, nome: categorias.nome })
@@ -45,6 +47,7 @@ async function obterOuCriar(
   return encontrado
 }
 
+/** Devolve a pessoa com esse nome (ignorando maiúsculas) ou cria uma nova. */
 export function obterOuCriarPessoa(db: Db, nome: string): Promise<ItemCadastro> {
   return obterOuCriar(
     nome,
@@ -67,6 +70,7 @@ export function obterOuCriarPessoa(db: Db, nome: string): Promise<ItemCadastro> 
   )
 }
 
+/** Devolve a categoria com esse nome (ignorando maiúsculas) ou cria uma nova. */
 export function obterOuCriarCategoria(db: Db, nome: string): Promise<ItemCadastro> {
   return obterOuCriar(
     nome,

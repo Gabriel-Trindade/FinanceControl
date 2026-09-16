@@ -29,7 +29,7 @@ Next.js 16 (App Router, TypeScript) · Neon Postgres + Drizzle ORM · Tailwind C
 Vitest (com PGlite, um Postgres em memória, nos testes) · Vercel Hobby.
 
 ## Comandos
-Criados pelo Plano 1. Enquanto a Tarefa 1 não rodar, o projeto ainda não tem `package.json`.
+Detalhes no README.md.
 - `npm run dev`: servidor local
 - `npm run build`: build de produção
 - `npm run lint`: ESLint
