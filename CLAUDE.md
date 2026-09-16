@@ -33,7 +33,7 @@ Detalhes no README.md.
 - `npm run dev`: servidor local
 - `npm run build`: build de produção
 - `npm run lint`: ESLint
-- `npm run typecheck`: checagem de tipos (`tsc --noEmit`)
+- `npm run typecheck`: checagem de tipos (`next typegen && tsc --noEmit`)
 - `npm test`: testes (Vitest)
 - `npm run db:generate` / `npm run db:migrate`: gerar e aplicar migrações do banco
 - `npm run credenciais`: gerar o hash da senha e o segredo da sessão para o `.env.local`

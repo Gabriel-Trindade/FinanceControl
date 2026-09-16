@@ -50,6 +50,7 @@ export function FormularioLancamento(props: { hoje: string; pessoas: string[]; c
   const [recebido, setRecebido] = useState(false)
   const [erros, setErros] = useState<Erros>({})
   const [aviso, setAviso] = useState<string | null>(null)
+  const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [enviando, iniciarEnvio] = useTransition()
 
   function mudarDataCompra(nova: string) {
@@ -78,7 +79,8 @@ export function FormularioLancamento(props: { hoje: string; pessoas: string[]; c
         const resultado = await salvarLancamento(dados)
         if (!resultado.ok) {
           setErros(resultado.erros)
-          setAviso(resultado.erroGeral ?? null)
+          setAviso(null)
+          setErroGeral(resultado.erroGeral ?? null)
           return
         }
         // "Salvar e lançar outro": mantém pessoa, data da compra e mês da fatura; limpa o resto.
@@ -91,13 +93,15 @@ export function FormularioLancamento(props: { hoje: string; pessoas: string[]; c
         setRecorrente(false)
         setRecebido(false)
         setErros({})
+        setErroGeral(null)
         setAviso('Lançamento salvo. Pode lançar o próximo.')
       } catch (erro) {
         // O redirect() de "Salvar" e o redirect da sessão expirada (exigirSessao) atravessam a Server
         // Action como um erro especial do Next; unstable_rethrow reconhece esse erro e o relança para
         // o Next terminar a navegação. Qualquer outro erro (rede caiu, deploy novo no ar) segue adiante.
         unstable_rethrow(erro)
-        setAviso('Não foi possível salvar. Tente de novo.')
+        setAviso(null)
+        setErroGeral('Não foi possível salvar. Tente de novo.')
         return
       }
     })
@@ -175,6 +179,11 @@ export function FormularioLancamento(props: { hoje: string; pessoas: string[]; c
       {aviso && (
         <p role="status" className="text-sm">
           {aviso}
+        </p>
+      )}
+      {erroGeral && (
+        <p role="alert" className="text-sm text-destructive">
+          {erroGeral}
         </p>
       )}
 

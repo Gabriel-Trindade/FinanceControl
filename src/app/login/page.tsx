@@ -6,7 +6,8 @@ import { FormularioLogin } from './formulario-login'
 export default async function PaginaLogin({
   searchParams,
 }: {
-  searchParams: Promise<{ voltar?: string }>
+  // string[] quando "voltar" repete na query (?voltar=/a&voltar=/b); destinoSeguro trata os dois casos.
+  searchParams: Promise<{ voltar?: string | string[] }>
 }) {
   const destino = destinoSeguro((await searchParams).voltar)
   if (await obterSessao()) redirect(destino)

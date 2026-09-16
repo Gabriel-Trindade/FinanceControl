@@ -28,14 +28,25 @@ export type LancamentoValidado = {
 
 type Erros = Partial<Record<CampoFormulario, string>>
 
+// Limite da coluna `integer` do Postgres (2^31 - 1). Acima disso o INSERT falha no banco, e sem
+// este refine o dono só via "Não foi possível salvar. Tente de novo." sem saber que o valor era o problema.
+const CENTAVOS_MAXIMOS = 2_147_483_647
+
 const esquema = z.object({
   pessoa: z.string().trim().min(1, 'Informe a pessoa'),
   categoria: z.string().trim().min(1, 'Informe a categoria'),
   item: z.string().trim().min(1, 'Informe o item'),
-  valor: z.string().refine((texto) => {
-    const centavos = paraCentavos(texto)
-    return centavos !== null && centavos !== 0
-  }, 'Valor inválido: use o formato 1.234,56'),
+  valor: z
+    .string()
+    .refine((texto) => {
+      const centavos = paraCentavos(texto)
+      return centavos !== null && centavos !== 0
+    }, 'Valor inválido: use o formato 1.234,56')
+    .refine((texto) => {
+      const centavos = paraCentavos(texto)
+      // null (formato inválido) já foi barrado pelo refine acima; aqui só reage a valor grande demais.
+      return centavos === null || Math.abs(centavos) <= CENTAVOS_MAXIMOS
+    }, 'Valor acima do limite de R$ 21.474.836,47'),
   credito: z.string().optional(),
   dataCompra: z.string().refine(ehDataValida, 'Data da compra inválida'),
   mesFatura: z.string().refine((texto) => lerMes(texto) !== null, 'Mês da fatura inválido'),

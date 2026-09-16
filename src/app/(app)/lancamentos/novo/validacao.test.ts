@@ -58,6 +58,7 @@ describe('validarFormularioLancamento', () => {
     ['item', { item: '' }],
     ['valor', { valor: 'abc' }],
     ['valor', { valor: '0,00' }],
+    ['valor', { valor: '1234567890' }], // 123.456.789.000 centavos: estoura o `integer` do Postgres
     ['dataCompra', { dataCompra: '2026-02-30' }],
     ['mesFatura', { mesFatura: '2026-13' }],
     ['parcelaAtual', { parcelaAtual: '0' }],

@@ -2,8 +2,10 @@ import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 
 const PREFIXO = 'scrypt'
 const TAMANHO_CHAVE = 64
-const PARAMETROS = { N: 2 ** 16, r: 8, p: 1 }
+// p=2 (mínimo recomendado pela OWASP para scrypt, contra p=1) custa mais CPU por hash.
+const PARAMETROS = { N: 2 ** 16, r: 8, p: 2 }
 // N=2^16 usa ~64 MB; o limite padrão do Node é 32 MB, então liberamos 128 MB.
+// (O teto do Node é 128*N*r, sem o "p": subir p não muda essa conta, só o tempo de CPU.)
 const MEMORIA_MAXIMA = 128 * 1024 * 1024
 
 type Parametros = { N: number; r: number; p: number }

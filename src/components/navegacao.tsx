@@ -15,9 +15,9 @@ export function Navegacao() {
   return (
     <nav
       aria-label="Principal"
-      // No celular fica embaixo; a margem respeita a barra de gestos do iPhone.
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed inset-x-0 bottom-0 z-10 flex border-t bg-background md:inset-y-0 md:right-auto md:w-56 md:flex-col md:border-t-0 md:border-r md:p-4"
+      // No celular fica embaixo; o pb- respeita a barra de gestos do iPhone (precisa de classe, não
+      // style inline: style sempre venceria o md:pb-4 e colaria o "Sair" na borda no computador).
+      className="fixed inset-x-0 bottom-0 z-10 flex border-t bg-background pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:right-auto md:w-56 md:flex-col md:border-t-0 md:border-r md:p-4 md:pb-4"
     >
       {LINKS.map((link) => {
         const ativo = caminho === link.href

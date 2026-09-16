@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FinanceControl",
   description: "Controle do cartão compartilhado",
+};
+
+// viewportFit "cover": deixa o conteúdo ocupar até a borda da tela (atrás do notch/barra de gestos).
+// Sem isso, env(safe-area-inset-bottom) (usado em src/components/navegacao.tsx) sempre vale 0.
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

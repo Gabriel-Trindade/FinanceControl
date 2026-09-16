@@ -78,7 +78,7 @@ export function ListaDoMes({ linhas }: { linhas: LinhaDoMes[] }) {
                 type="checkbox"
                 className="size-5"
                 aria-label={`Selecionar ${linha.item}`}
-                disabled={!emAberto}
+                disabled={!emAberto || enviando}
                 checked={selecionados.has(linha.id)}
                 onChange={() => alternar(linha.id)}
               />
