@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, type ReactNode } from 'react'
+import { unstable_rethrow } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -73,23 +74,32 @@ export function FormularioLancamento(props: { hoje: string; pessoas: string[]; c
     dados.set('depois', depois)
 
     iniciarEnvio(async () => {
-      const resultado = await salvarLancamento(dados)
-      if (!resultado.ok) {
-        setErros(resultado.erros)
-        setAviso(resultado.erroGeral ?? null)
+      try {
+        const resultado = await salvarLancamento(dados)
+        if (!resultado.ok) {
+          setErros(resultado.erros)
+          setAviso(resultado.erroGeral ?? null)
+          return
+        }
+        // "Salvar e lançar outro": mantém pessoa, data da compra e mês da fatura; limpa o resto.
+        setValor('')
+        setItem('')
+        setCategoria('')
+        setCredito(false)
+        setParcelaAtual('1')
+        setQtdParcelas('1')
+        setRecorrente(false)
+        setRecebido(false)
+        setErros({})
+        setAviso('Lançamento salvo. Pode lançar o próximo.')
+      } catch (erro) {
+        // O redirect() de "Salvar" e o redirect da sessão expirada (exigirSessao) atravessam a Server
+        // Action como um erro especial do Next; unstable_rethrow reconhece esse erro e o relança para
+        // o Next terminar a navegação. Qualquer outro erro (rede caiu, deploy novo no ar) segue adiante.
+        unstable_rethrow(erro)
+        setAviso('Não foi possível salvar. Tente de novo.')
         return
       }
-      // "Salvar e lançar outro": mantém pessoa, data da compra e mês da fatura; limpa o resto.
-      setValor('')
-      setItem('')
-      setCategoria('')
-      setCredito(false)
-      setParcelaAtual('1')
-      setQtdParcelas('1')
-      setRecorrente(false)
-      setRecebido(false)
-      setErros({})
-      setAviso('Lançamento salvo. Pode lançar o próximo.')
     })
   }
 
