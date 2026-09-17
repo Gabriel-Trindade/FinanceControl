@@ -178,20 +178,32 @@ em português.
 | — | `fonte` | sempre `'planilha'` |
 | — | `data_compra` | sempre `null`. A planilha não tem essa informação |
 
-### 6.3 Valor em centavos, sem ponto flutuante
+### 6.3 Valor em centavos, sem erro de ponto flutuante
 
-O `read-excel-file` aceita a opção `parseNumber`. Passando `parseNumber: (texto) => texto`, a célula
-numérica chega como **o texto original do arquivo**, antes de virar ponto flutuante.
+Converter o valor direto do `number` é uma armadilha: `1.005 × 100` vale `100.49999999999999` em ponto
+flutuante, então `-1,005` arredondaria para `-100` em vez de `-101`. Com 433 valores de mais de duas
+casas e 393 negativos, é um erro que aconteceria de verdade.
 
-A conversão então é decimal pura: separar sinal, parte inteira e parte decimal do texto; completar ou
-arredondar a parte decimal para dois dígitos, **meio para longe do zero**; montar o inteiro.
+`valorParaCentavos` aceita **`string | number`** e trata os dois:
 
-Isso elimina uma classe inteira de erro. Convertendo primeiro para `number`, `1.005 × 100` vale
-`100.49999999999999` em ponto flutuante, e `-1,005` arredondaria para `-100` em vez de `-101`. Com 433
-valores de mais de duas casas e 393 negativos, é um erro que aconteceria de verdade.
+- **Texto** (o número como está escrito no arquivo): conversão decimal pura — separar sinal, parte
+  inteira e parte decimal; completar ou arredondar a decimal para dois dígitos, **meio para longe do
+  zero**; montar o inteiro. Sem passar por ponto flutuante em momento algum.
+- **Número:** limpar o ruído binário antes de arredondar, com
+  `Math.round(Number((Math.abs(v) * 100).toFixed(6)))`, e aplicar o sinal depois.
 
-Casos que os testes fixam: `-0,125 → -13` · `-1,005 → -101` · `1,005 → 101` · `0 → 0` (nunca `-0`,
-que faz `expect(-0).toBe(0)` falhar no Vitest).
+Aceitar os dois formatos é deliberado. O `read-excel-file` tem a opção `parseNumber`, que entregaria
+toda célula numérica como texto — o caminho mais exato. Mas ela vale para **todas** as células
+numéricas, e no formato XLSX uma data é um número com formato de data: não está verificado se a
+detecção de datas sobrevive a um `parseNumber` próprio. O tradutor funcionar nos dois formatos tira
+essa incerteza do caminho crítico. Se uma medição futura mostrar que `parseNumber` é seguro, é só
+ligá-lo no leitor — o tradutor não muda.
+
+O sinal é aplicado como `v < 0 ? -c : c`, nunca com `Math.sign`, que devolve `-0` e faz
+`expect(-0).toBe(0)` falhar no Vitest.
+
+Casos que os testes fixam, nos dois formatos: `-0,125 → -13` · `-1,005 → -101` · `1,005 → 101` ·
+`0 → 0` sem `-0` · `1234,56 → 123456`.
 
 ### 6.4 Problemas e avisos
 
