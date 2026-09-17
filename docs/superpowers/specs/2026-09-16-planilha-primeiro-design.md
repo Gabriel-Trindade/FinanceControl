@@ -167,7 +167,7 @@ em português.
 | VENCIMENTO | `mes_fatura` | `Date` → `AAAA-MM-01` lendo **`getUTCFullYear` e `getUTCMonth`**. Nunca `toISOString()` sobre data local: o dia 5 poderia cair no mês anterior |
 | ANO, MÊS | — | **ignorados** (fórmula) |
 | CATEGORIA | `categoria_id` | normalizado (NFC + `trim` + colapso de espaços, igual a `normalizarNome`) |
-| ITEM | `item` | `trim`; vazio é problema |
+| ITEM | `item` | `.normalize('NFC')` + `trim`; vazio é problema. O NFC alinha o item com pessoa e categoria, que já normalizam — e a R10 (§8.1) agrupa séries por item, onde "Café" em duas formas Unicode não agruparia |
 | VALOR | `valor_centavos` | ver 6.3 |
 | PARCELA ATUAL | `parcela_atual` | inteiro; `0` é corrigido para `1` com aviso; ausente ou não numérico é problema |
 | QTD PARCELAS | `qtd_parcelas` / `recorrente` | `∞` → `recorrente = true`, `qtd_parcelas = null`; número → `recorrente = false`; **vazio ou não numérico é problema** |

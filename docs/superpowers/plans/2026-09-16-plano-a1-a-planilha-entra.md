@@ -814,6 +814,7 @@ Acrescente a `src/domain/planilha.ts`. Importe `calcularSubtotal` e o tipo `Paga
 Pontos que o teste cobra e que é fácil errar:
 
 - **Data em UTC.** `getUTCFullYear()` e `getUTCMonth()`, nunca `toISOString()` sobre data local: o dia 5 em fuso negativo viraria dia 4, e em janeiro cairia em dezembro do ano anterior.
+- **`item` também leva `.normalize('NFC')`**, antes do `trim()`. Pessoa e categoria já normalizam (via `normalizarNome`, Tarefa 1) e o item não normalizava — mas ele vem do mesmo Excel, e a R10 do Plano A2 agrupa séries por item. "Café" em NFC e em NFD não agrupariam, e o bug seria silencioso.
 - **Aviso de arredondamento:** compare `Number(bruto)` com `centavos / 100`; se diferirem, houve arredondamento. A comparação é exata em ponto flutuante nos dois casos, porque dividir inteiro por 100 e ler o decimal dão o mesmo `double`.
 - **`∞`:** a célula pode chegar como `'∞'` ou com espaços; compare depois de `trim()`.
 - **Limite de `smallint`:** `parcelaAtual` e `qtdParcelas` são `smallint` no schema — acima de 32.767 o `INSERT` derrubaria **o lote inteiro**, não só a linha. Por isso é problema, não aviso.
