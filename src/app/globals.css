@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -23,6 +23,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  /* Sem este mapeamento, "bg-situacao-recebido"/"text-situacao-recebido" não existem como
+     classe utilitária do Tailwind — as telas ficariam presas a text-[var(--situacao-recebido)]. */
+  --color-situacao-a-receber: var(--situacao-a-receber);
+  --color-situacao-recebido: var(--situacao-recebido);
+  --color-situacao-a-abater: var(--situacao-a-abater);
+  --color-situacao-abatido: var(--situacao-abatido);
+  --color-situacao-perdoado: var(--situacao-perdoado);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -70,11 +77,64 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+
+  /*
+   * Tokens de situação (R5, src/domain/lancamento.ts) e de gráfico — contraste medido de
+   * verdade, não estimado pelo "L" do oklch: L é luminosidade PERCEPTUAL, e duas cores com o
+   * mesmo L podem dar contrastes diferentes contra o mesmo fundo (o canal de cor pesa: verde
+   * pesa mais que azul na luminância que o WCAG usa). Conferido convertendo cada oklch(L C H)
+   * para sRGB linear e aplicando a fórmula de luminância relativa + razão de contraste do
+   * WCAG (script e raciocínio completo em
+   * .superpowers/sdd/2026-09-16-plano-a1-a-planilha-entra/task-3-report.md). Mínimo exigido:
+   * 4.5:1. Fundo claro: --background e --card são o mesmo branco (oklch(1 0 0)). Fundo
+   * escuro: medido contra os dois, --background (oklch(0.145 0 0), o mais escuro e mais
+   * exigente) e --card (oklch(0.205 0 0)).
+   *
+   *                        claro (vs bg/card)   escuro (vs bg  /  vs card)
+   *   situacao-a-receber        5.15:1              5.77:1   /   5.22:1
+   *   situacao-recebido         5.17:1              5.85:1   /   5.29:1
+   *   situacao-a-abater         5.05:1              5.91:1   /   5.34:1
+   *   situacao-abatido          5.28:1              5.71:1   /   5.17:1
+   *   situacao-perdoado         5.06:1              5.89:1   /   5.33:1
+   *   chart-1                   5.25:1              5.29:1   /   4.79:1
+   *   chart-2                   4.77:1              9.08:1   /   8.22:1
+   *   chart-3                   7.93:1              7.16:1   /   6.48:1
+   *   chart-4                   6.13:1              6.21:1   /   5.62:1
+   *   chart-5                  10.26:1              8.11:1   /   7.34:1
+   *
+   * Todos os 20 valores (5 situações + 5 gráficos, 2 temas) passam de 4.5:1 com folga.
+   *
+   * chart-1..5 também foram checados por luminância relativa (não só contraste): a primeira
+   * tentativa deixou chart-1 e chart-2 quase colados (0.177 vs 0.170 no claro — a mesma cor
+   * em escala de cinza) porque os dois são matizes com bastante verde, que pesa mais na
+   * luminância do WCAG. Reajustado para um "degrau" de luminância entre os 5, maior gap
+   * >= 0.020 no claro e >= 0.048 no escuro — assim quem não distingue cor ainda separa as
+   * séries pela luminância, mesmo antes da hachura/traço do Plano A2.
+   */
+
+  /* R5: A_RECEBER e RECEBIDO são o par "a receber" (âmbar = ainda não veio; verde = já veio,
+     positivo). A_ABATER e ABATIDO são o par "crédito" (azul e ciano/teal — nunca vermelho:
+     crédito não é erro, --destructive fica exclusivo do vermelho). PERDOADO é o único estado
+     encerrado e por isso o mais apagado dos cinco: quase acromático (chroma 0.02, os outros
+     quatro vão de 0.085 a 0.17), só um traço de matiz fria para não virar --muted-foreground
+     disfarçado. Hue mantido igual entre claro e escuro em cada token — só L/C mudam — para a
+     cor "de mesmo nome" não parecer outra cor ao trocar de tema. */
+  --situacao-a-receber: oklch(0.54 0.11 76);
+  --situacao-recebido: oklch(0.52 0.14 150);
+  --situacao-a-abater: oklch(0.54 0.145 248);
+  --situacao-abatido: oklch(0.52 0.085 192);
+  --situacao-perdoado: oklch(0.54 0.02 260);
+
+  /* Paleta categórica genérica (pessoa, categoria, mês — o que o gráfico do Plano A2 precisar),
+     independente do vocabulário de situação acima: um gráfico de "quanto cada pessoa deve" não
+     tem 1:1 com A_RECEBER/RECEBIDO/etc. Cada cor varia também em luminância (não só matiz), para
+     sobreviver à escala de cinza de quem não distingue cor; o traço/hachura por série do Plano A2
+     é a segunda camada, não a única. */
+  --chart-1: oklch(0.52 0.09 180);
+  --chart-2: oklch(0.55 0.12 110);
+  --chart-3: oklch(0.45 0.14 40);
+  --chart-4: oklch(0.5 0.135 265);
+  --chart-5: oklch(0.4 0.19 320);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -108,11 +168,21 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+
+    /* Mesma hue do claro em cada token (só L/C sobem, como o --destructive já fazia:
+       claro 0.577/0.245 -> escuro 0.704/0.191, mais claro e um pouco menos saturado — tom
+       tonal, não cor invertida). Contraste de cada um contra --background/--card escuros
+       medido e documentado no comentário grande acima do bloco claro. */
+    --situacao-a-receber: oklch(0.64 0.13 76);
+    --situacao-recebido: oklch(0.62 0.17 150);
+    --situacao-a-abater: oklch(0.64 0.17 248);
+    --situacao-abatido: oklch(0.62 0.105 192);
+    --situacao-perdoado: oklch(0.64 0.02 260);
+    --chart-1: oklch(0.6 0.105 180);
+    --chart-2: oklch(0.75 0.16 110);
+    --chart-3: oklch(0.71 0.185 40);
+    --chart-4: oklch(0.66 0.175 265);
+    --chart-5: oklch(0.75 0.21 320);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
