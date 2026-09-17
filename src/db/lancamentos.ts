@@ -1,0 +1,86 @@
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import type { Pagamento } from '@/domain/lancamento'
+import { compararNomes } from '@/domain/texto'
+import { categorias, lancamentos, pessoas } from './schema'
+import type { Db } from './tipos'
+
+export type NovoLancamento = {
+  mesFatura: string
+  dataCompra: string | null
+  pessoaId: number
+  categoriaId: number
+  item: string
+  valorCentavos: number
+  parcelaAtual: number
+  qtdParcelas: number | null
+  recorrente: boolean
+  pagamento: 'NAO' | 'SIM'
+  pagoEm: string | null
+}
+
+export type LancamentoDoMes = {
+  id: number
+  mesFatura: string
+  dataCompra: string | null
+  pessoaId: number
+  pessoa: string
+  categoriaId: number
+  categoria: string
+  item: string
+  valorCentavos: number
+  parcelaAtual: number
+  qtdParcelas: number | null
+  recorrente: boolean
+  pagamento: Pagamento
+  pagoEm: string | null
+}
+
+/** Grava um lançamento digitado no site (fonte "manual") e devolve o id criado. */
+export async function criarLancamento(db: Db, dados: NovoLancamento): Promise<{ id: number }> {
+  const [criado] = await db
+    .insert(lancamentos)
+    .values({ ...dados, fonte: 'manual' })
+    .returning({ id: lancamentos.id })
+  return criado
+}
+
+/** Lançamentos de uma fatura, com os nomes da pessoa e da categoria, ordenados por pessoa. */
+export async function listarLancamentosDoMes(db: Db, mesFatura: string): Promise<LancamentoDoMes[]> {
+  const linhas = await db
+    .select({
+      id: lancamentos.id,
+      mesFatura: lancamentos.mesFatura,
+      dataCompra: lancamentos.dataCompra,
+      pessoaId: lancamentos.pessoaId,
+      pessoa: pessoas.nome,
+      categoriaId: lancamentos.categoriaId,
+      categoria: categorias.nome,
+      item: lancamentos.item,
+      valorCentavos: lancamentos.valorCentavos,
+      parcelaAtual: lancamentos.parcelaAtual,
+      qtdParcelas: lancamentos.qtdParcelas,
+      recorrente: lancamentos.recorrente,
+      pagamento: lancamentos.pagamento,
+      pagoEm: lancamentos.pagoEm,
+    })
+    .from(lancamentos)
+    .innerJoin(pessoas, eq(lancamentos.pessoaId, pessoas.id))
+    .innerJoin(categorias, eq(lancamentos.categoriaId, categorias.id))
+    .where(eq(lancamentos.mesFatura, mesFatura))
+    // Só o desempate (ordem de criação) vem do SQL; o agrupamento por pessoa é feito
+    // abaixo, em JavaScript, porque o banco usa collation "C" (ver src/domain/texto.ts).
+    .orderBy(asc(lancamentos.id))
+  // Array.prototype.sort é estável: dentro da mesma pessoa, a ordem por id acima se mantém.
+  return linhas.sort((a, b) => compararNomes(a.pessoa, b.pessoa))
+}
+
+/** Um único UPDATE para todos os ids: o driver HTTP do Neon não faz transação interativa. */
+export async function marcarComoRecebidos(db: Db, ids: number[], hoje: string): Promise<number> {
+  if (ids.length === 0) return 0
+  const alterados = await db
+    .update(lancamentos)
+    .set({ pagamento: 'SIM', pagoEm: hoje, atualizadoEm: sql`now()` })
+    .where(and(inArray(lancamentos.id, ids), eq(lancamentos.pagamento, 'NAO')))
+    .returning({ id: lancamentos.id })
+  return alterados.length
+}

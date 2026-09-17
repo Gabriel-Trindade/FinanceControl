@@ -28,3 +28,12 @@ dados-reais/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Certificados e gerenciadores alternativos (vindos do template do Next)
+*.pem
+.pnp
+.pnp.*
+.yarn/*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
