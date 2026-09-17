@@ -52,6 +52,10 @@ export const lancamentos = pgTable(
     id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
     mesFatura: date('mes_fatura', { mode: 'string' }).notNull(),
     dataCompra: date('data_compra', { mode: 'string' }),
+    // CÓD da planilha. Fica separado do id porque são duas numerações independentes:
+    // o id é do banco, o CÓD é do Excel. Juntá-los faria um lançamento manual roubar
+    // o número de uma linha futura da planilha, e o reenvio aditivo pararia de funcionar.
+    codPlanilha: integer('cod_planilha'),
     pessoaId: integer('pessoa_id')
       .notNull()
       .references(() => pessoas.id, { onDelete: 'restrict' }),
@@ -80,6 +84,11 @@ export const lancamentos = pgTable(
     check('lancamentos_pago_em_so_com_sim', sql`${t.pagoEm} is null or ${t.pagamento} = 'SIM'`),
     index('lancamentos_mes_fatura_idx').on(t.mesFatura),
     index('lancamentos_pessoa_pagamento_idx').on(t.pessoaId, t.pagamento),
+    // Índice simples, não parcial: o Postgres trata cada NULL como distinto dos outros,
+    // então muitos lançamentos manuais sem CÓD convivem aqui sem conflito. Um índice
+    // parcial quebraria o ON CONFLICT da gravação, que só reconhece índice parcial
+    // quando a cláusula WHERE dele é repetida na consulta.
+    uniqueIndex('lancamentos_cod_planilha_unico').on(t.codPlanilha),
   ],
 )
 
