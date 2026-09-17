@@ -5,9 +5,14 @@ import type { Db } from './tipos'
 
 export type ItemCadastro = { id: number; nome: string }
 
-/** "  Ana   Maria " → "Ana Maria". */
+/**
+ * "  Ana   Maria " → "Ana Maria", já em forma Unicode NFC.
+ * O NFC não é enfeite: "é" pode ser gravado como um caractere ou como "e" + acento
+ * combinante. São iguais na tela, mas o índice pessoas_nome_unico compara bytes —
+ * sem normalizar, o mesmo nome vindo do Excel viraria uma segunda pessoa.
+ */
 export function normalizarNome(nome: string): string {
-  return nome.trim().replace(/\s+/g, ' ')
+  return nome.normalize('NFC').trim().replace(/\s+/g, ' ')
 }
 
 /** Pessoas que aparecem nas listas de escolha, em ordem alfabética. */

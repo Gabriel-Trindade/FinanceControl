@@ -8,6 +8,13 @@
       "when": 1789481867981,
       "tag": "0000_inicial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789639619034,
+      "tag": "0001_normalizar_nomes_nfc",
+      "breakpoints": true
     }
   ]
 }
