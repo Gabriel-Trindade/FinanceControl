@@ -79,37 +79,48 @@
   --ring: oklch(0.708 0 0);
 
   /*
-   * Tokens de situação (R5, src/domain/lancamento.ts) e de gráfico — contraste medido de
-   * verdade, não estimado pelo "L" do oklch: L é luminosidade PERCEPTUAL, e duas cores com o
-   * mesmo L podem dar contrastes diferentes contra o mesmo fundo (o canal de cor pesa: verde
-   * pesa mais que azul na luminância que o WCAG usa). Conferido convertendo cada oklch(L C H)
-   * para sRGB linear e aplicando a fórmula de luminância relativa + razão de contraste do
-   * WCAG (script e raciocínio completo em
-   * .superpowers/sdd/2026-09-16-plano-a1-a-planilha-entra/task-3-report.md). Mínimo exigido:
-   * 4.5:1. Fundo claro: --background e --card são o mesmo branco (oklch(1 0 0)). Fundo
-   * escuro: medido contra os dois, --background (oklch(0.145 0 0), o mais escuro e mais
-   * exigente) e --card (oklch(0.205 0 0)).
+   * Contraste medido de verdade (oklch(L C H) -> sRGB linear -> luminância relativa WCAG ->
+   * razão de contraste), não estimado pelo "L" do oklch, que é luminosidade PERCEPTUAL, não a
+   * luminância que o WCAG usa (script e raciocínio completo em
+   * .superpowers/sdd/2026-09-16-plano-a1-a-planilha-entra/task-3-report.md).
    *
-   *                        claro (vs bg/card)   escuro (vs bg  /  vs card)
-   *   situacao-a-receber        5.15:1              5.77:1   /   5.22:1
-   *   situacao-recebido         5.17:1              5.85:1   /   5.29:1
-   *   situacao-a-abater         5.05:1              5.91:1   /   5.34:1
-   *   situacao-abatido          5.28:1              5.71:1   /   5.17:1
-   *   situacao-perdoado         5.06:1              5.89:1   /   5.33:1
-   *   chart-1                   5.25:1              5.29:1   /   4.79:1
-   *   chart-2                   4.77:1              9.08:1   /   8.22:1
-   *   chart-3                   7.93:1              7.16:1   /   6.48:1
-   *   chart-4                   6.13:1              6.21:1   /   5.62:1
-   *   chart-5                  10.26:1              8.11:1   /   7.34:1
+   * DOIS mínimos diferentes, corrigido numa rodada de revisão: --situacao-* é TEXTO (rótulo de
+   * chip/lançamento) e por isso segue WCAG 1.4.3, mínimo 4.5:1. --chart-1..5 é PREENCHIMENTO
+   * gráfico (barra, linha, fatia), não texto — o mínimo certo é WCAG 1.4.11, 3:1. O pedido
+   * original desta tarefa exigia 4.5:1 também para os gráficos; isso espremia as 5 cores numa
+   * faixa estreita de luminosidade e foi a causa direta da colisão descrita abaixo.
    *
-   * Todos os 20 valores (5 situações + 5 gráficos, 2 temas) passam de 4.5:1 com folga.
+   *                        claro (vs bg/card)   escuro (vs bg  /  vs card)      mínimo
+   *   situacao-a-receber        5.15:1              5.77:1   /   5.22:1        4.5:1 (texto)
+   *   situacao-recebido         5.17:1              5.85:1   /   5.29:1        4.5:1 (texto)
+   *   situacao-a-abater         5.05:1              5.91:1   /   5.34:1        4.5:1 (texto)
+   *   situacao-abatido          5.28:1              5.71:1   /   5.17:1        4.5:1 (texto)
+   *   situacao-perdoado         5.06:1              5.89:1   /   5.33:1        4.5:1 (texto)
+   *   chart-1                   5.25:1              5.29:1   /   4.79:1        3:1 (gráfico)
+   *   chart-2                   3.62:1              8.65:1   /   7.82:1        3:1 (gráfico)
+   *   chart-3                   8.90:1              4.15:1   /   3.76:1        3:1 (gráfico)
+   *   chart-4                   5.07:1              5.43:1   /   4.91:1        3:1 (gráfico)
+   *   chart-5                  10.93:1              9.19:1   /   8.32:1        3:1 (gráfico)
    *
-   * chart-1..5 também foram checados por luminância relativa (não só contraste): a primeira
-   * tentativa deixou chart-1 e chart-2 quase colados (0.177 vs 0.170 no claro — a mesma cor
-   * em escala de cinza) porque os dois são matizes com bastante verde, que pesa mais na
-   * luminância do WCAG. Reajustado para um "degrau" de luminância entre os 5, maior gap
-   * >= 0.020 no claro e >= 0.048 no escuro — assim quem não distingue cor ainda separa as
-   * séries pela luminância, mesmo antes da hachura/traço do Plano A2.
+   * CUIDADO com a simulação de daltonismo usada para verificar chart-1..5 entre si: escala de
+   * cinza (filter: grayscale) simula ACROMATOPSIA (~1 em 30.000 pessoas) e NÃO BASTA —
+   * protanopia e deuteranopia (~8% dos homens) preservam luminância quase normal, então um
+   * "degrau de luminância" não ajuda essas duas. A primeira versão desta paleta passava na
+   * escala de cinza e ainda assim colidia de verdade: chart-4 x chart-5 em protanopia e
+   * chart-2 x chart-3 em deuteranopia, as duas com deltaE OKLab < 0.04 (a mesma cor na
+   * prática). Reprojetada e verificada simulando as duas de verdade (matrizes de Machado,
+   * Oliveira & Fernandes 2009, severidade 1.0, aplicadas em sRGB linear): o par mais próximo
+   * entre os 10 possíveis, nos dois temas e nas duas simulações, ficou em deltaE OKLab 0.109
+   * (escuro, protanopia, chart-4 x chart-5) — a distância mínima subiu quase 5x. Tabela
+   * completa (10 pares x 2 simulações x 2 temas, com hexadecimal simulado) no relatório.
+   *
+   * O que isso NÃO garante: a razão de luminância relativa ENTRE as 5 cores de gráfico (não
+   * contra o fundo) continua abaixo de 3:1 em quase todos os pares (mínimo 1.03:1, máximo
+   * 3.02:1, nos dois temas) — a distinção entre séries vem da posição em OKLab como um todo
+   * (matiz + luminosidade), não de um degrau de luminância isolado que sobrevive à simulação.
+   * Por isso a hachura/traço por série do Plano A2 continua sendo necessária, não decorativa:
+   * nenhuma cor aqui é garantia formal de distinção sozinha — é a melhor separação que 5 cores
+   * conseguem dar de largada, sujeita a folga apertada em alguns pares.
    */
 
   /* R5: A_RECEBER e RECEBIDO são o par "a receber" (âmbar = ainda não veio; verde = já veio,
@@ -127,14 +138,15 @@
 
   /* Paleta categórica genérica (pessoa, categoria, mês — o que o gráfico do Plano A2 precisar),
      independente do vocabulário de situação acima: um gráfico de "quanto cada pessoa deve" não
-     tem 1:1 com A_RECEBER/RECEBIDO/etc. Cada cor varia também em luminância (não só matiz), para
-     sobreviver à escala de cinza de quem não distingue cor; o traço/hachura por série do Plano A2
-     é a segunda camada, não a única. */
+     tem 1:1 com A_RECEBER/RECEBIDO/etc. As 5 hues (180/100/45/250/345) e a luminosidade de cada
+     uma foram escolhidas e verificadas simulando protanopia e deuteranopia de verdade, não só
+     olhando matiz — ver o comentário grande acima e o relatório da tarefa. O traço/hachura por
+     série do Plano A2 continua sendo a segunda camada necessária, não decorativa. */
   --chart-1: oklch(0.52 0.09 180);
-  --chart-2: oklch(0.55 0.12 110);
-  --chart-3: oklch(0.45 0.14 40);
-  --chart-4: oklch(0.5 0.135 265);
-  --chart-5: oklch(0.4 0.19 320);
+  --chart-2: oklch(0.62 0.125 100);
+  --chart-3: oklch(0.42 0.12 45);
+  --chart-4: oklch(0.54 0.15 250);
+  --chart-5: oklch(0.38 0.16 345);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -179,10 +191,10 @@
     --situacao-abatido: oklch(0.62 0.105 192);
     --situacao-perdoado: oklch(0.64 0.02 260);
     --chart-1: oklch(0.6 0.105 180);
-    --chart-2: oklch(0.75 0.16 110);
-    --chart-3: oklch(0.71 0.185 40);
-    --chart-4: oklch(0.66 0.175 265);
-    --chart-5: oklch(0.75 0.21 320);
+    --chart-2: oklch(0.74 0.15 100);
+    --chart-3: oklch(0.57 0.16 45);
+    --chart-4: oklch(0.62 0.175 250);
+    --chart-5: oklch(0.78 0.16 345);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
