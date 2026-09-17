@@ -251,11 +251,11 @@ Em `src/db/schema.ts`, dentro de `lancamentos`, depois de `dataCompra`:
 E, na lista de restrições da mesma tabela:
 
 ```ts
-    // Índice parcial: vários lançamentos manuais podem ter cod_planilha nulo,
-    // mas um CÓD que veio da planilha só pode existir uma vez.
-    uniqueIndex('lancamentos_cod_planilha_unico')
-      .on(t.codPlanilha)
-      .where(sql`${t.codPlanilha} is not null`),
+    // Índice simples, não parcial: o Postgres trata cada NULL como distinto dos outros,
+    // então muitos lançamentos manuais sem CÓD convivem aqui sem conflito. Um índice
+    // parcial quebraria o ON CONFLICT da gravação, que só reconhece índice parcial
+    // quando a cláusula WHERE dele é repetida na consulta.
+    uniqueIndex('lancamentos_cod_planilha_unico').on(t.codPlanilha),
 ```
 
 - [ ] **Passo 4: gerar e conferir a migração**
@@ -1147,7 +1147,7 @@ Esperado: FALHA — o módulo não existe.
 
 Crie `src/db/importacao.ts`. Pontos que os testes cobram:
 
-- `gravarLote` usa **um** `INSERT` com todas as linhas do lote e `.onConflictDoNothing({ target: lancamentos.codPlanilha })`, e devolve `.returning()` contado. Nunca um `INSERT` por linha.
+- `gravarLote` usa **um** `INSERT` com todas as linhas do lote e `.onConflictDoNothing({ target: lancamentos.codPlanilha })`, e devolve `.returning()` contado. Nunca um `INSERT` por linha. O `target` funciona porque o índice da Tarefa 2 é simples: contra um índice **parcial**, o Postgres responde `there is no unique or exclusion constraint matching the ON CONFLICT specification` — em tempo de execução, não de compilação.
 - `resolverCadastros` chama `obterOuCriarPessoa`/`obterOuCriarCategoria` **uma vez por nome distinto**, não uma por linha: são ~44 nomes contra 4.805 linhas. Passe os nomes por `normalizarNome` antes de usar como chave do mapa, para a chave bater com o que foi gravado.
 - `codsJaImportados` seleciona só a coluna `codPlanilha`, com `inArray`. Nunca `select()` da linha inteira.
 - `TAMANHO_DO_LOTE = 500`: o `INSERT` grava 13 colunas por linha e o Postgres aceita 65.535 parâmetros por consulta. 500 dá 6.500, com folga larga e dez passos de progresso.

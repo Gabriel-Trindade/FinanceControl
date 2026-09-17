@@ -61,7 +61,10 @@ A spec do Núcleo §6.2 mandava gravar `CÓD → id`, e o schema foi feito para 
 A causa é uma chave com dois donos: `id` é a numeração do banco, `CÓD` é a do Excel, e são
 independentes. Separá-las resolve os dois casos de uma vez:
 
-- `lancamentos.cod_planilha integer NULL`, com índice único parcial `WHERE cod_planilha IS NOT NULL`.
+- `lancamentos.cod_planilha integer NULL`, com índice único **simples**. Não precisa ser parcial: o
+  Postgres trata cada `NULL` como distinto dos outros, então muitos lançamentos manuais sem `CÓD`
+  convivem sem conflito. Um índice parcial, além de desnecessário, quebraria o `ON CONFLICT`, que só
+  reconhece índice parcial se a cláusula `WHERE` dele for repetida — verificado contra o PGlite.
 - `id` volta a ser gerado pelo banco, sempre.
 - "Já importado" passa a ser testado por `cod_planilha`, e a idempotência vira
   `ON CONFLICT (cod_planilha) DO NOTHING` — a definição exata de D2 em SQL.
