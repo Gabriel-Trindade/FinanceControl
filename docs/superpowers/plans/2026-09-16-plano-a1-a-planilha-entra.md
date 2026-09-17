@@ -26,6 +26,7 @@ Valem para **todas** as tarefas. Vêm do `CLAUDE.md` e da spec.
 - Comentário no código explica o **porquê** do trecho não óbvio, não o que ele faz.
 - **Nunca desestruture o retorno de `db.execute`.** Neste projeto o tipo `Db` faz esse retorno resolver para `unknown`, e desestruturar reprova no `typecheck` com `TS2488`, mesmo o teste passando. Para contar linhas use `db.$count(tabela)`; para ler, `db.select(...).from(...)`.
 - O shell deste projeto é **PowerShell**. Prefixo de variável inline (`VAR=x comando`) não existe: use `$env:VAR='x'; comando`.
+- **`npm test` verde não significa tipos corretos.** O Vitest compila com esbuild, que apaga os tipos sem checá-los. Um erro de tipo só aparece no `npm run typecheck`, que é portão separado. No passo "veja falhar" do TDD, o vermelho pode precisar de dois comandos: um pelo comportamento, outro pelo tipo.
 
 ---
 
@@ -271,7 +272,7 @@ describe('cod_planilha', () => {
 npx vitest run src/db/cod-planilha.test.ts
 ```
 
-Esperado: FALHA de compilação — `codPlanilha` não existe em `lancamentos`.
+Esperado: FALHA. Mas atenção ao **como**: o Vitest compila com esbuild, que apaga os tipos sem checá-los, então a chave `codPlanilha` inexistente não gera erro de tipo aqui — o Drizzle simplesmente a ignora, e o vermelho vem do comportamento (a segunda inserção resolve em vez de rejeitar). Para ver o erro de tipo, rode `npm run typecheck` à parte. Dois comandos, um vermelho cada.
 
 - [ ] **Passo 3: acrescentar a coluna ao schema**
 
