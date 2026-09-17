@@ -344,8 +344,28 @@ dois temas. O único token com cor é `--destructive`. Não existe token para A 
 A ABATER, ABATIDO ou PERDOADO, que a spec do Núcleo §8 exige como chips coloridos.
 
 **Entregável, antes de qualquer tela:** uma tabela de tokens em `globals.css`, em `oklch`, cobrindo as
-cinco situações e as séries de gráfico, nos temas claro e escuro, com contraste medido (mínimo 4.5:1).
-Sem isso o critério de aceite 10 não é verificável e cada tela inventaria a própria cor.
+cinco situações e as séries de gráfico, nos temas claro e escuro, com contraste **medido**. Sem isso o
+critério de aceite 11 não é verificável e cada tela inventaria a própria cor.
+
+Duas réguas diferentes, e confundi-las tem consequência:
+
+- **`--situacao-*`: 4,5:1.** São texto, e caem na WCAG 1.4.3.
+- **`--chart-*`: 3:1.** São preenchimento, e caem na WCAG **1.4.11** (componente não textual). Exigir
+  4,5:1 aqui espreme as cinco cores numa faixa estreita de luminosidade — foi o que produziu colisão
+  sob daltonismo na primeira tentativa.
+
+**Distinguibilidade sob daltonismo** se testa com simulação de **protanopia e deuteranopia** (cerca de
+8% dos homens), pelas matrizes de Machado et al. 2009. **Não** use `filter: grayscale(1)`: aquilo
+simula acromatopsia, que atinge 1 em 30.000 pessoas, e quem tem protanopia **enxerga luminância
+normalmente** — degrau de brilho não resolve nada para essas pessoas.
+
+Mesmo com a paleta otimizada, nenhum par de séries chega a 3:1 de luminância **entre si**. Os gráficos
+do Plano A2 precisam parear cada série com um segundo sinal (hachura ou traço). É obrigatório.
+
+**O chip de situação não leva preenchimento tingido.** Borda e texto na cor, fundo do cartão por baixo.
+Medido: `bg-situacao-X/10` com `text-situacao-X` dá 4,41 a 4,63:1 no tema claro, e dois dos cinco ficam
+abaixo do mínimo; sem tinta, dá 5,05 a 5,29:1. Os tokens são calibrados contra fundo liso e não sobra
+folga para servirem de texto sobre tinta da mesma matiz.
 
 ### 9.2 Ordem da tela
 
