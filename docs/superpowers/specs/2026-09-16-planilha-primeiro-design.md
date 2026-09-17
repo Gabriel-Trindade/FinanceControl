@@ -40,7 +40,7 @@ Que o dono consiga, pelo celular:
 | D6 | Tamanho e tempo? | **Ler no aparelho do dono**; gravar em lotes idempotentes de 500 | O `.xlsx` nunca toca o servidor (critério 5 do PRD) |
 | D7 | Biblioteca de leitura | **`read-excel-file` 9.3.10** | Verificado: MIT, publicada em ago/2026, exports separados para navegador e Web Worker, erros tipados. O `xlsx` (SheetJS) no npm está congelado em 2022 com duas falhas graves sem correção; `exceljs` está parado desde dez/2024 e tem 21,8 MB |
 | D8 | Biblioteca de gráficos | **Recharts 3.8**, via `npx shadcn add chart` | Verificado: as `peerDependencies` aceitam React 19, e o `ChartContainer` do shadcn gera variáveis de cor por tema |
-| D9 | Fonte tipográfica | **IBM Plex Sans**, via `next/font/google` | Fecha a pendência do `AJUSTES-DO-PROJETO.md` §1. Não é fonte variável: exige `weight` explícito |
+| D9 | Fonte tipográfica | **IBM Plex Sans**, via `next/font/google` | Fecha a pendência do `AJUSTES-DO-PROJETO.md` §1. É fonte variável no Next 16.3.5 (eixos `wght` 100–700 e `wdth`), então `weight` pode ser omitido e vem um arquivo só |
 | D10 | Produção na Vercel | **No Plano B** | Escolha do dono. A migração no banco `dev` vira ensaio: nenhum dado real corre risco enquanto o código muda |
 | D11 | E se gravar dados errados? | **Desfazer importação**: apaga só `fonte = 'planilha'` | O `DO NOTHING` protege contra falha no meio, mas impede corrigir dado já gravado |
 | **D12** | **Onde guardar o `CÓD`?** | **Coluna nova `cod_planilha`, única, anulável.** O `id` volta a ser só do banco | **Precisa de confirmação do dono.** Ver §3.1 |
@@ -144,7 +144,7 @@ entra no repositório.**
 
 | Pacote | Onde | Observação |
 |---|---|---|
-| `read-excel-file` | cliente, via `import()` dinâmico | Só na tela de importação, para não pesar as outras. Se a leitura travar a interface no celular, o export `read-excel-file/web-worker` resolve sem trocar de biblioteca |
+| `read-excel-file` | cliente, via `import()` dinâmico | Importar de **`read-excel-file/browser`**: o pacote não tem export padrão, só `./browser`, `./node`, `./web-worker` e `./universal`. O `import()` é dinâmico para a biblioteca só viajar até o navegador nesta tela. O build `/browser` **já usa Web Worker por dentro** ao ler o arquivo, então as 4.805 linhas não travam a interface — `/web-worker` é o caminho que **não** gera worker, e não serve aqui |
 | `recharts` | cliente | Entra com `npx shadcn add chart`, que também cria `src/components/ui/chart.tsx` |
 
 ## 6. Importação da planilha
@@ -485,7 +485,7 @@ na mesma rede. Vai para o README.
 | Dupla contagem ou contagem a menos na projeção | Corridas (8.2), com teste para cada caso |
 | Linha inválida derrubando o lote inteiro | A lista de problemas (6.4) cobre tudo que viola `CHECK` ou `smallint` |
 | Biblioteca de leitura pesando no pacote | `import()` dinâmico só na tela de importação |
-| Leitura travando a interface no celular | Export `read-excel-file/web-worker`, se a medição pedir |
+| Leitura travando a interface no celular | Resolvido pela própria biblioteca: o build `/browser` lê o arquivo dentro de um Web Worker |
 | Cor inventada por tela | Tokens fixados antes de qualquer tela (9.1) |
 | Migração feita duas vezes (dev e produção) | Consequência aceita de D10; a primeira é ensaio e o procedimento é idempotente |
 

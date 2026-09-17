@@ -24,6 +24,8 @@ Valem para **todas** as tarefas. Vêm do `CLAUDE.md` e da spec.
 - Nunca commitar `.env*`, `.xlsx`, `.csv`, `.pdf` ou qualquer dado real. Testes usam dados fictícios.
 - Antes de cada commit: `npm test && npm run lint && npm run typecheck`.
 - Comentário no código explica o **porquê** do trecho não óbvio, não o que ele faz.
+- **Nunca desestruture o retorno de `db.execute`.** Neste projeto o tipo `Db` faz esse retorno resolver para `unknown`, e desestruturar reprova no `typecheck` com `TS2488`, mesmo o teste passando. Para contar linhas use `db.$count(tabela)`; para ler, `db.select(...).from(...)`.
+- O shell deste projeto é **PowerShell**. Prefixo de variável inline (`VAR=x comando`) não existe: use `$env:VAR='x'; comando`.
 
 ---
 
@@ -120,14 +122,24 @@ UPDATE pessoas SET nome = normalize(nome, NFC) WHERE nome <> normalize(nome, NFC
 UPDATE categorias SET nome = normalize(nome, NFC) WHERE nome <> normalize(nome, NFC);
 ```
 
+`normalize(texto, NFC)` existe no Postgres e **funciona no PGlite** dos testes (verificado contra o PGlite 0.5.8 / Postgres 18.3).
+
+**Antes de aplicar no banco `dev`**, confira que o `UPDATE` não vai colidir. Se "José" já existir nas duas formas, normalizar as duas viola `pessoas_nome_unico` e a migração aborta no meio:
+
+```bash
+npm run db:migrate
+```
+
+Se abortar com `pessoas_nome_unico` ou `categorias_nome_unico`, há nome duplicado em formas diferentes. São poucas linhas no `dev`: apague a duplicata à mão antes de repetir.
+
 - [ ] **Passo 6: testar a migração contra o banco em memória**
 
 Acrescente a `src/db/cadastros-nfc.test.ts`:
 
 ```ts
-import { sql } from 'drizzle-orm'
 import { criarBancoDeTeste } from '../../tests/banco-de-teste'
 import { obterOuCriarPessoa } from './cadastros'
+import { pessoas } from './schema'
 
 it('o mesmo nome em NFC e NFD resolve para uma pessoa só', async () => {
   const { db, fechar } = await criarBancoDeTeste()
@@ -135,16 +147,40 @@ it('o mesmo nome em NFC e NFD resolve para uma pessoa só', async () => {
     const primeira = await obterOuCriarPessoa(db, NFD)
     const segunda = await obterOuCriarPessoa(db, NFC)
     expect(segunda.id).toBe(primeira.id)
-
-    const [{ total }] = await db.execute<{ total: number }>(
-      sql`select count(*)::int as total from pessoas`,
-    )
-    expect(total).toBe(1)
+    expect(await db.$count(pessoas)).toBe(1)
   } finally {
     await fechar()
   }
 })
 ```
+
+**Não use `db.execute`.** Neste projeto o tipo `Db` faz `db.execute` resolver para `unknown`, e desestruturar o resultado reprova no `typecheck` com `TS2488: Type 'unknown' must have a '[Symbol.iterator]()' method` — mesmo o teste passando. Use `db.$count(tabela)`, que devolve `number`, ou `db.select(...).from(...)` com `toHaveLength`. Vale para **todas** as tarefas deste plano.
+
+- [ ] **Passo 6b: provar que a migração faz alguma coisa**
+
+O teste acima exercita a função, não a migração: `criarBancoDeTeste` aplica as migrações num banco **vazio**, então o `UPDATE` não encontra nada e passaria mesmo com o SQL errado. Acrescente:
+
+```ts
+import { sql } from 'drizzle-orm'
+
+it('a migração normaliza nomes já gravados em NFD', async () => {
+  const { db, fechar } = await criarBancoDeTeste()
+  try {
+    // Insere direto, sem passar por normalizarNome: simula linha gravada antes da correção.
+    await db.insert(pessoas).values({ nome: NFD })
+    await db.execute(sql`update pessoas set nome = normalize(nome, NFC) where nome <> normalize(nome, NFC)`)
+
+    // Agora a busca por lower(nome) encontra a linha, em vez de criar uma segunda.
+    const encontrada = await obterOuCriarPessoa(db, NFC)
+    expect(encontrada.nome).toBe(NFC)
+    expect(await db.$count(pessoas)).toBe(1)
+  } finally {
+    await fechar()
+  }
+})
+```
+
+Aqui `db.execute` aparece sem desestruturar o retorno, que é o uso que compila.
 
 - [ ] **Passo 7: rodar tudo e commitar**
 
@@ -172,7 +208,7 @@ Decisão D12 da spec §3.1. O `CÓD` do Excel e o `id` do banco são numeraçõe
 
 **Interfaces:**
 - Consome: nada
-- Produz: `lancamentos.codPlanilha: integer | null`, com índice único parcial `lancamentos_cod_planilha_unico`. As tarefas 9 e 11 dependem disso.
+- Produz: `lancamentos.codPlanilha: integer | null`, com índice único **simples** `lancamentos_cod_planilha_unico`. As tarefas 9 e 11 dependem disso.
 
 - [ ] **Passo 1: escrever o teste que falha**
 
@@ -261,10 +297,19 @@ E, na lista de restrições da mesma tabela:
 - [ ] **Passo 4: gerar e conferir a migração**
 
 ```bash
-npm run db:generate
+npx drizzle-kit generate --name=cod_planilha
 ```
 
-Abra o arquivo gerado em `drizzle/` e confirme que ele tem `ADD COLUMN "cod_planilha" integer` e o `CREATE UNIQUE INDEX ... WHERE "cod_planilha" is not null`. Não edite à mão.
+O `--name` não é opcional: sem ele o drizzle-kit inventa um nome aleatório e o arquivo `0002_cod_planilha.sql` listado em **Arquivos** não vai existir.
+
+Abra o arquivo gerado em `drizzle/` e confirme que ele tem:
+
+```sql
+ALTER TABLE "lancamentos" ADD COLUMN "cod_planilha" integer;
+CREATE UNIQUE INDEX "lancamentos_cod_planilha_unico" ON "lancamentos" USING btree ("cod_planilha");
+```
+
+**Sem `WHERE`.** Se aparecer um `WHERE cod_planilha is not null`, o schema do passo 3 foi escrito com `.where()` e precisa voltar — um índice parcial faz o `ON CONFLICT` da Tarefa 9 falhar em execução com `there is no unique or exclusion constraint matching the ON CONFLICT specification`. Não edite a migração à mão: corrija o schema e gere de novo.
 
 - [ ] **Passo 5: rodar e ver passar**
 
@@ -303,15 +348,16 @@ Spec §9.1 e §10. Precisa vir **antes** de qualquer tela: hoje `--chart-1` a `-
 
 - [ ] **Passo 1: trocar a fonte**
 
-Em `src/app/layout.tsx`, troque a importação e a declaração. `IBM_Plex_Sans` **não é fonte variável**: exige `weight` explícito, e o `AJUSTES-DO-PROJETO.md` §5 usa só dois pesos (400 e 500).
+Em `src/app/layout.tsx`, troque a importação e a declaração:
 
 ```tsx
 import { IBM_Plex_Sans, Geist_Mono } from "next/font/google";
 
+// Sem weight: no Next 16.3.5 a IBM Plex Sans é fonte variável (eixos wght 100–700
+// e wdth), então vem um arquivo só e qualquer peso fica disponível.
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
   subsets: ["latin"],
-  weight: ["400", "500"],
 });
 ```
 
@@ -333,6 +379,8 @@ No bloco `:root` de `globals.css`, junto dos outros tokens, e **repetidos no blo
 - A ABATER e ABATIDO são crédito, não erro: não reaproveite `--destructive`.
 - PERDOADO é o estado neutro-encerrado: o mais apagado dos cinco.
 - `--chart-1` a `--chart-5` precisam ser distinguíveis entre si **e** por quem não enxerga cor — os gráficos do Plano A2 vão parear cada série com um segundo sinal (hachura ou traço), mas a cor não pode ser a única diferença já na origem.
+
+**Mapeie os tokens novos em `@theme inline` também**, junto de `--color-chart-1` e companhia (linhas 30–34 do arquivo): `--color-situacao-a-receber: var(--situacao-a-receber);` e assim por diante. Sem isso, `bg-situacao-recebido` não existe como classe e as telas ficam presas a `text-[var(--situacao-recebido)]`.
 
 - [ ] **Passo 4: conferir o contraste**
 
@@ -381,7 +429,7 @@ git commit -m "feat: fonte IBM Plex Sans e tokens de cor de situacao e grafico"
 
 // Captura erro de qualquer página abaixo da raiz. Precisa ser Client Component:
 // é o React que chama esta tela quando um componente abaixo lança.
-export default function Erro({ reset }: { error: Error; reset: () => void }) {
+export default function Erro({ retry }: { error: Error; retry: () => void }) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 p-6">
       <h1 className="text-xl font-semibold">Alguma coisa deu errado</h1>
@@ -390,7 +438,7 @@ export default function Erro({ reset }: { error: Error; reset: () => void }) {
       </p>
       <button
         type="button"
-        onClick={reset}
+        onClick={() => retry()}
         className="min-h-11 rounded-md border px-4 text-sm font-medium"
       >
         Tentar de novo
@@ -399,6 +447,8 @@ export default function Erro({ reset }: { error: Error; reset: () => void }) {
   )
 }
 ```
+
+**É `retry`, não `reset`.** O `retry` virou estável no Next 16.3.0 e é ele que **refaz a busca** no servidor antes de renderizar de novo. O `reset` só limpa o estado de erro e re-renderiza com os mesmos dados — com o banco fora do ar, o dono clicaria em "Tentar de novo" e veria exatamente a mesma tela. Os dois compilam, então nem o `typecheck` nem o teste do passo 3 acusariam a troca. Leia `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/error.md` antes de escrever: este Next tem mudanças que não estão na memória do modelo.
 
 Não mostre `error.message` na tela: pode conter detalhe da conexão com o banco.
 
@@ -411,13 +461,13 @@ Este substitui o `<html>` inteiro, então precisa trazer as próprias tags:
 
 // Último recurso: só dispara quando o erro acontece no próprio layout raiz,
 // e por isso precisa renderizar <html> e <body>, que ali já falharam.
-export default function ErroGlobal({ reset }: { error: Error; reset: () => void }) {
+export default function ErroGlobal({ retry }: { error: Error; retry: () => void }) {
   return (
     <html lang="pt-BR">
       <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0, padding: '2rem' }}>
         <h1 style={{ fontSize: '1.25rem' }}>O aplicativo não conseguiu iniciar</h1>
         <p style={{ fontSize: '0.875rem' }}>Tente de novo em alguns instantes.</p>
-        <button type="button" onClick={reset} style={{ minHeight: '2.75rem', padding: '0 1rem' }}>
+        <button type="button" onClick={() => retry()} style={{ minHeight: '2.75rem', padding: '0 1rem' }}>
           Tentar de novo
         </button>
       </body>
@@ -426,7 +476,7 @@ export default function ErroGlobal({ reset }: { error: Error; reset: () => void 
 }
 ```
 
-O estilo vai inline de propósito: se o layout raiz falhou, o `globals.css` pode não ter carregado.
+O estilo vai inline de propósito, e não é preciosismo: a documentação confirma que o `global-error` **não recebe os estilos globais**, porque substitui o layout raiz onde eles são carregados.
 
 - [ ] **Passo 3: verificar na prática**
 
@@ -455,11 +505,13 @@ Em `.github/workflows/ci.yml`, acrescente o passo depois de `npm test`:
 
 - [ ] **Passo 5: conferir que o build passa localmente com as mesmas variáveis**
 
-```bash
-DATABASE_URL=postgresql://ci:ci@localhost:5432/ci AUTH_USUARIO=ci AUTH_SENHA_HASH=scrypt:16384:8:1:Y2ktc2FsLWZhbHNv:Y2ktaGFzaC1mYWxzbw AUTH_SEGREDO=segredo-falso-do-ci-com-mais-de-32-caracteres npm run build
+No PowerShell, que é o shell deste projeto (não existe prefixo de variável inline como no bash):
+
+```powershell
+$env:DATABASE_URL='postgresql://ci:ci@localhost:5432/ci'; $env:AUTH_USUARIO='ci'; $env:AUTH_SENHA_HASH='scrypt:16384:8:1:Y2ktc2FsLWZhbHNv:Y2ktaGFzaC1mYWxzbw'; $env:AUTH_SEGREDO='segredo-falso-do-ci-com-mais-de-32-caracteres'; npm run build
 ```
 
-Esperado: build conclui. Se falhar por variável de ambiente, o valor no workflow precisa do mesmo ajuste.
+Esperado: build conclui. **Renomeie o `.env.local` temporariamente** antes de rodar, senão ele fornece as variáveis e o teste não prova nada. Se falhar por variável de ambiente, o valor no workflow precisa do mesmo ajuste.
 
 - [ ] **Passo 6: rodar tudo e commitar**
 
@@ -666,10 +718,22 @@ describe('traduzirLinha', () => {
     expect(r.ok && r.lancamento.qtdParcelas).toBeNull()
   })
 
-  it('PAGO? vazio vira NAO', () => {
-    expect(traduzirLinha(linha({ 12: null })).ok && traduzirLinha(linha({ 12: null })))
-      .toMatchObject({ lancamento: { pagamento: 'NAO' } })
-    expect(traduzirLinha(linha({ 12: '' }))).toMatchObject({ lancamento: { pagamento: 'NAO' } })
+  it.each([
+    ['nulo', null],
+    ['texto vazio', ''],
+    ['só espaços', '   '],
+  ])('PAGO? %s vira NAO', (_nome, celula) => {
+    const r = traduzirLinha(linha({ 12: celula }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.lancamento.pagamento).toBe('NAO')
+  })
+
+  it('PAGO? PERDOADO entra como PERDOADO', () => {
+    const r = traduzirLinha(linha({ 12: 'PERDOADO' }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.lancamento.pagamento).toBe('PERDOADO')
   })
 
   it('lê a data em UTC, para o dia 5 não cair no mês anterior', () => {
@@ -684,21 +748,37 @@ describe('traduzirLinha', () => {
   })
 
   it('valor com mais de duas casas gera aviso', () => {
-    const r = traduzirLinha(linha({ 6: 150.555 }))
-    expect(r.ok && r.lancamento.valorCentavos).toBe(15056)
-    expect(r.ok && r.avisos.some((a) => a.includes('arredondado'))).toBe(true)
+    // A célula 9 acompanha: 150.555 × 3 = 451.665, senão dispara também o aviso de SUBTOTAL.
+    const r = traduzirLinha(linha({ 6: 150.555, 9: 451.665 }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.lancamento.valorCentavos).toBe(15056)
+    expect(r.avisos.some((a) => a.includes('arredondado'))).toBe(true)
   })
 
   it('valor zero entra, com aviso', () => {
-    const r = traduzirLinha(linha({ 6: 0 }))
-    expect(r.ok && r.lancamento.valorCentavos).toBe(0)
-    expect(r.ok && r.avisos.some((a) => a.includes('zero'))).toBe(true)
+    const r = traduzirLinha(linha({ 6: 0, 9: 0 }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.lancamento.valorCentavos).toBe(0)
+    expect(r.avisos.some((a) => a.includes('zero'))).toBe(true)
   })
 
-  it('SUBTOTAL diferente do que a R4 calcula gera aviso', () => {
+  it('SUBTOTAL sobrescrito à mão gera aviso', () => {
     // valor 150.50 × 3 parcelas = 451.50; aqui está 999 (fórmula sobrescrita à mão)
     const r = traduzirLinha(linha({ 9: 999 }))
     expect(r.ok && r.avisos.some((a) => a.includes('SUBTOTAL'))).toBe(true)
+  })
+
+  it('SUBTOTAL do Excel, calculado antes do arredondamento, NÃO gera aviso', () => {
+    // Este é o teste que impede o aviso de disparar às centenas.
+    // A fórmula do Excel é QTD × VALOR sem arredondar: 3 × 33,333333 = 99,999999.
+    // calcularSubtotal multiplica os centavos JÁ arredondados: 3 × 3333 = 9999.
+    // Os dois divergem por 1 centavo, e isso é normal — não é fórmula sobrescrita.
+    const r = traduzirLinha(linha({ 6: 33.333333, 7: 1, 8: 3, 9: 99.999999 }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.avisos.some((a) => a.includes('SUBTOTAL'))).toBe(false)
   })
 
   it.each([
@@ -734,11 +814,16 @@ Acrescente a `src/domain/planilha.ts`. Importe `calcularSubtotal` e o tipo `Paga
 Pontos que o teste cobra e que é fácil errar:
 
 - **Data em UTC.** `getUTCFullYear()` e `getUTCMonth()`, nunca `toISOString()` sobre data local: o dia 5 em fuso negativo viraria dia 4, e em janeiro cairia em dezembro do ano anterior.
-- **Aviso de arredondamento:** compare o valor bruto com `centavos / 100`; se diferirem, houve arredondamento.
+- **Aviso de arredondamento:** compare `Number(bruto)` com `centavos / 100`; se diferirem, houve arredondamento. A comparação é exata em ponto flutuante nos dois casos, porque dividir inteiro por 100 e ler o decimal dão o mesmo `double`.
 - **`∞`:** a célula pode chegar como `'∞'` ou com espaços; compare depois de `trim()`.
 - **Limite de `smallint`:** `parcelaAtual` e `qtdParcelas` são `smallint` no schema — acima de 32.767 o `INSERT` derrubaria **o lote inteiro**, não só a linha. Por isso é problema, não aviso.
 - **`qtdParcelas` vazia com `recorrente = false`** violaria `lancamentos_parcelas_coerentes`: também é problema.
-- **Aviso de SUBTOTAL:** compare a célula 9 com `calcularSubtotal({ valorCentavos, qtdParcelas, recorrente })`, os dois em centavos.
+- **Aviso de SUBTOTAL, com tolerância.** Compare a célula 9 com `calcularSubtotal(...)`, os dois em centavos, e **só avise se a diferença passar de `qtdParcelas` centavos**.
+
+  A tolerância não é frouxidão: a fórmula do Excel é `QTD × VALOR` calculada sobre o valor **sem arredondar**, enquanto `calcularSubtotal` multiplica os centavos **já arredondados**. Para qualquer das 433 linhas de mais de duas casas com `QTD ≥ 2`, os dois divergem por alguns centavos — sem tolerância o aviso dispararia centenas de vezes, e as 4 fórmulas realmente sobrescritas (a única coisa que o aviso existe para achar) ficariam enterradas no meio do ruído, junto com o critério de conferência da Tarefa 12. O desvio máximo é da ordem de `qtdParcelas / 2 + 1` centavos; usar `qtdParcelas` como folga cobre isso e ainda pega as sobrescritas, que divergem por valores grandes.
+
+- **Mensagens.** Escreva a tabela de mensagens antes de implementar, uma frase por motivo, e reaproveite: é esse texto que o dono lê na tela de conferência. Quando uma linha tiver dois defeitos, vence o **primeiro** motivo na ordem em que a lista da §6.4 da spec está escrita — fixe a ordem, para o texto não mudar conforme a implementação.
+- **Células numéricas podem chegar como texto.** `CÓD`, `VALOR`, `PARCELA ATUAL` e `QTD PARCELAS` aceitam `number` ou `string` numérica (`'3'` é válido). `valorParaCentavos` já trata os dois; faça o mesmo para os inteiros.
 
 - [ ] **Passo 4: rodar e ver passar**
 
@@ -912,6 +997,7 @@ Spec §6.1 e §11. É a única parte que conhece o formato do arquivo.
 export const COLUNAS_ESPERADAS: readonly string[]
 export class ErroDeLeitura extends Error { constructor(mensagem: string) }
 export function conferirCabecalho(primeiraLinha: Celula[]): void  // lança ErroDeLeitura
+export function mapearErroDeLeitura(erro: unknown, tipos: {...}): ErroDeLeitura
 export async function lerPlanilha(arquivo: File): Promise<Celula[][]>  // sem o cabeçalho
 ```
 
@@ -931,7 +1017,7 @@ Crie `src/importacao/ler-xlsx.test.ts`. Só o cabeçalho é testado aqui — `le
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { COLUNAS_ESPERADAS, conferirCabecalho, ErroDeLeitura } from './ler-xlsx'
+import { COLUNAS_ESPERADAS, conferirCabecalho, ErroDeLeitura, mapearErroDeLeitura } from './ler-xlsx'
 
 describe('conferirCabecalho', () => {
   it('aceita o cabeçalho da aba GASTOS', () => {
@@ -958,7 +1044,26 @@ describe('conferirCabecalho', () => {
     expect(() => conferirCabecalho([])).toThrow(ErroDeLeitura)
   })
 })
+
+describe('mapearErroDeLeitura', () => {
+  it('traduz cada erro da biblioteca para português', async () => {
+    const m = await import('read-excel-file/browser')
+
+    expect(mapearErroDeLeitura(new m.SheetNotFoundError('x'), m).message).toContain('GASTOS')
+    expect(mapearErroDeLeitura(new m.InvalidSpreadsheetError('x'), m).message).toContain('senha')
+    expect(mapearErroDeLeitura(new m.InvalidInputError('x'), m).message).toContain('.xlsx')
+    expect(mapearErroDeLeitura(new Error('desconhecido'), m)).toBeInstanceOf(ErroDeLeitura)
+  })
+
+  it('não embrulha um ErroDeLeitura que já veio pronto', async () => {
+    const m = await import('read-excel-file/browser')
+    const original = new ErroDeLeitura('mensagem original')
+    expect(mapearErroDeLeitura(original, m)).toBe(original)
+  })
+})
 ```
+
+Se os construtores dessas classes exigirem argumentos diferentes, veja a assinatura em `node_modules/read-excel-file/browser/index.d.ts` e ajuste **só a construção no teste** — os nomes estão confirmados.
 
 - [ ] **Passo 3: rodar e ver falhar**
 
@@ -1016,24 +1121,40 @@ export function conferirCabecalho(primeiraLinha: Celula[]): void {
   }
 }
 
+/** Traduz o erro da biblioteca numa mensagem que o dono entende. Separado para ter teste. */
+export function mapearErroDeLeitura(
+  erro: unknown,
+  tipos: {
+    SheetNotFoundError: new (...args: never[]) => Error
+    InvalidSpreadsheetError: new (...args: never[]) => Error
+    InvalidInputError: new (...args: never[]) => Error
+  },
+): ErroDeLeitura {
+  if (erro instanceof ErroDeLeitura) return erro
+  if (erro instanceof tipos.SheetNotFoundError) {
+    return new ErroDeLeitura(`A planilha não tem a aba "${NOME_DA_ABA}".`)
+  }
+  if (erro instanceof tipos.InvalidSpreadsheetError) {
+    return new ErroDeLeitura('O arquivo não é uma planilha válida, ou está protegido por senha.')
+  }
+  if (erro instanceof tipos.InvalidInputError) {
+    return new ErroDeLeitura('Não foi possível ler o arquivo. Ele precisa ser um .xlsx.')
+  }
+  return new ErroDeLeitura('Não foi possível ler o arquivo.')
+}
+
 /**
  * Abre o .xlsx no próprio aparelho e devolve as linhas de dados, sem o cabeçalho.
  * O import é dinâmico para a biblioteca só viajar até o navegador nesta tela.
  */
 export async function lerPlanilha(arquivo: File): Promise<Celula[][]> {
-  const { readSheet, SheetNotFoundError, InvalidSpreadsheetError } = await import('read-excel-file')
+  const modulo = await import('read-excel-file/browser')
 
   let linhas: Celula[][]
   try {
-    linhas = (await readSheet(arquivo, NOME_DA_ABA)) as Celula[][]
+    linhas = (await modulo.readSheet(arquivo, NOME_DA_ABA)) as Celula[][]
   } catch (erro) {
-    if (erro instanceof SheetNotFoundError) {
-      throw new ErroDeLeitura(`A planilha não tem a aba "${NOME_DA_ABA}".`)
-    }
-    if (erro instanceof InvalidSpreadsheetError) {
-      throw new ErroDeLeitura('O arquivo não é uma planilha válida, ou está protegido por senha.')
-    }
-    throw new ErroDeLeitura('Não foi possível ler o arquivo. Ele precisa ser um .xlsx.')
+    throw mapearErroDeLeitura(erro, modulo)
   }
 
   const [cabecalho, ...dados] = linhas
@@ -1042,7 +1163,11 @@ export async function lerPlanilha(arquivo: File): Promise<Celula[][]> {
 }
 ```
 
-Se os nomes `SheetNotFoundError` e `InvalidSpreadsheetError` não existirem no pacote instalado, confira `node_modules/read-excel-file/browser/index.d.ts` e use os que estiverem lá. **Não invente nomes.**
+**O caminho é `'read-excel-file/browser'`, não `'read-excel-file'`.** O pacote 9.3.10 **não tem export padrão**: o `exports` do `package.json` só declara `./browser`, `./node`, `./web-worker`, `./universal` e `./package.json`. Importar do nome cru falha com `ERR_PACKAGE_PATH_NOT_EXPORTED` — e falha no build ou em execução, nunca no `tsc`, então os testes desta tarefa passariam e o erro só apareceria quando o dono escolhesse o arquivo.
+
+Os quatro nomes usados acima já foram conferidos no pacote real e **existem** como classes exportadas em `/browser`: `readSheet`, `SheetNotFoundError`, `InvalidSpreadsheetError` e `InvalidInputError`. A assinatura é `readSheet(input, sheet?: number | string, options?)`, e `Input` aceita `File | Blob | ArrayBuffer` — então passar o `File` do navegador está correto. **Não troque esses nomes.**
+
+Passar o módulo inteiro para `mapearErroDeLeitura` existe por um motivo: as classes de erro só chegam depois do `import()` dinâmico, então não dá para usá-las num `instanceof` de módulo importado no topo — e é isso que torna as três outras recusas testáveis sem nenhum `.xlsx`.
 
 - [ ] **Passo 5: rodar e ver passar**
 
@@ -1103,7 +1228,9 @@ Crie `src/db/importacao.test.ts` cobrindo, cada um com seu `it`:
 4. Um lançamento manual (`fonte: 'manual'`, `codPlanilha: null`) com `id` igual a um `CÓD` da planilha **não** impede a linha da planilha de entrar — é a prova da decisão D12.
 5. `gravarLote` grava com `fonte: 'planilha'` — o desfazer depende disso.
 6. `desfazerImportacao` apaga só `fonte = 'planilha'`, deixando `manual` intacto.
-7. `resolverCadastros` devolve um mapa e **não cria duplicata** quando o mesmo nome vem duas vezes.
+7. `resolverCadastros` devolve um mapa e **não cria duplicata** quando o mesmo nome vem em grafias diferentes — use `'Ana'` e `'ANA'`, não o mesmo texto duas vezes; com texto repetido o teste passaria com qualquer implementação.
+8. **Reenviar não altera o que já existe.** Grave o lote, marque um lançamento como `pagamento: 'SIM'`, grave o mesmo lote de novo, e afirme que ele continua `'SIM'`. Os testes 3 e 8 provam coisas diferentes: o 3 diz que o reenvio não **duplica**, o 8 diz que não **sobrescreve** — e é o 8 que prova o critério de aceite 4.
+9. **Retomada depois de falha.** Grave o lote 1, simule a falha do lote 2 (não chame), depois grave lotes 1 e 2 juntos: o total precisa ficar certo, sem duplicata. É a prova de que "tentar de novo" é seguro.
 
 Modelo do teste 4, que é o mais importante:
 
@@ -1148,10 +1275,15 @@ Esperado: FALHA — o módulo não existe.
 Crie `src/db/importacao.ts`. Pontos que os testes cobram:
 
 - `gravarLote` usa **um** `INSERT` com todas as linhas do lote e `.onConflictDoNothing({ target: lancamentos.codPlanilha })`, e devolve `.returning()` contado. Nunca um `INSERT` por linha. O `target` funciona porque o índice da Tarefa 2 é simples: contra um índice **parcial**, o Postgres responde `there is no unique or exclusion constraint matching the ON CONFLICT specification` — em tempo de execução, não de compilação.
-- `resolverCadastros` chama `obterOuCriarPessoa`/`obterOuCriarCategoria` **uma vez por nome distinto**, não uma por linha: são ~44 nomes contra 4.805 linhas. Passe os nomes por `normalizarNome` antes de usar como chave do mapa, para a chave bater com o que foi gravado.
+- `resolverCadastros` chama `obterOuCriarPessoa`/`obterOuCriarCategoria` **uma vez por nome distinto**, não uma por linha: são ~44 nomes contra 4.805 linhas.
+- **A chave do mapa é `normalizarNome(nome).toLocaleLowerCase('pt-BR')`, nos dois lados** — ao montar em `resolverCadastros` e ao consultar em `gravarLote`. O banco compara por `lower(nome)` (é assim que `pessoas_nome_unico` é definido), então "Ana" e "ANA" são a **mesma** pessoa lá; sem baixar a caixa na chave, o mapa criaria duas entradas apontando para o mesmo id, e qualquer diferença entre as duas transformações faria `mapas.pessoas.get(nome)` devolver `undefined`. Esse erro é silencioso: o `INSERT` quebra com violação de `NOT NULL` no **lote inteiro**, sem dizer qual nome causou.
 - `codsJaImportados` seleciona só a coluna `codPlanilha`, com `inArray`. Nunca `select()` da linha inteira.
-- `TAMANHO_DO_LOTE = 500`: o `INSERT` grava 13 colunas por linha e o Postgres aceita 65.535 parâmetros por consulta. 500 dá 6.500, com folga larga e dez passos de progresso.
-- `desfazerImportacao` é `delete(lancamentos).where(eq(lancamentos.fonte, 'planilha'))`.
+- **O mapeamento para o `INSERT` é literal e completo**, com os três campos que a spec §6.2 fixa e que não vêm da planilha: `fonte: 'planilha'`, `pagoEm: null` e `dataCompra: null`. Mais `codPlanilha`, `mesFatura`, `pessoaId` e `categoriaId` (dos mapas), `item`, `valorCentavos`, `parcelaAtual`, `qtdParcelas`, `recorrente` e `pagamento`.
+- `TAMANHO_DO_LOTE = 500`: são 13 a 14 colunas por linha, e o Postgres aceita 65.535 parâmetros por consulta. 500 dá cerca de 7.000 — folga larga, com dez passos de progresso.
+- **`TAMANHO_DO_LOTE` mora em `src/importacao/`, não aqui.** A Tarefa 11 é componente de cliente e precisa dessa constante para fatiar; importá-la de `src/db/importacao.ts` arrastaria `drizzle-orm` e o schema inteiro para o pacote do navegador. Declare em `src/importacao/lotes.ts` e reexporte daqui, se for conveniente.
+- `desfazerImportacao` é `delete(lancamentos).where(eq(lancamentos.fonte, 'planilha'))`, devolvendo a contagem apagada.
+
+Uma confirmação útil, já verificada: `ON CONFLICT DO NOTHING` também lida com **duplicata dentro do mesmo `INSERT`** — três linhas com dois `CÓD` distintos inserem duas, sem erro. A estratégia de um `INSERT` por lote com `.returning()` contado está correta mesmo se a entrada repetir.
 
 - [ ] **Passo 4: rodar e ver passar**
 
@@ -1190,11 +1322,15 @@ Spec §6.5 e §12.
 - Produz:
 
 ```ts
-export async function conferirCods(cods: number[]): Promise<{ jaImportados: number[] }>
+export async function conferirCods(cods: unknown):
+  Promise<{ ok: true; jaImportados: number[] } | { ok: false; erro: string }>
 export async function gravarLoteAction(lote: unknown):
   Promise<{ ok: true; gravados: number } | { ok: false; erro: string }>
-export async function desfazerAction(): Promise<{ ok: true; apagados: number }>
+export async function desfazerAction():
+  Promise<{ ok: true; apagados: number } | { ok: false; erro: string }>
 ```
+
+As três devolvem o mesmo formato `{ ok }` para a tela tratar falha de um jeito só.
 
 A Tarefa 11 usa.
 
@@ -1210,19 +1346,38 @@ npx vitest run "src/app/(app)/importar/validacao.test.ts"
 
 - [ ] **Passo 3: escrever o esquema**
 
-Em `validacao.ts`, espelhe `LancamentoDaPlanilha` com Zod, com `.max(TAMANHO_DO_LOTE)` no array e `message` em português em cada regra. Siga o padrão de `src/app/(app)/lancamentos/novo/validacao.ts`, que já existe.
+Em `validacao.ts`, espelhe `LancamentoDaPlanilha` com Zod, com `message` em português em **cada** regra — o Zod responde em inglês por padrão, e um POST direto com tipo errado receberia a mensagem dele.
 
-- [ ] **Passo 4: escrever as actions**
+Este esquema é a única coisa entre um POST forjado e o banco, então os tetos numéricos não são opcionais:
 
-Em `actions.ts`, **`'use server'` no topo e `await exigirSessao()` na primeira linha de cada action** — inclusive na de conferir, que parece inofensiva mas revela quais `CÓD` existem.
+- `valorCentavos`: inteiro entre −2.147.483.647 e 2.147.483.647 (é `integer` no Postgres). O arquivo `src/app/(app)/lancamentos/novo/validacao.ts` já faz isso, com comentário — copie o limite de lá.
+- `parcelaAtual` e `qtdParcelas`: inteiros até **32.767** (`smallint`).
+- `codPlanilha`: inteiro ≥ 1.
+- `mesFatura`: `regex` exigindo `AAAA-MM-01` — o dia 1 é regra do projeto e o `CHECK` do banco também cobra.
+- o array: `.max(TAMANHO_DO_LOTE)`.
+
+Atenção ao "siga o padrão": `novo/validacao.ts` exporta uma **função** que devolve erros por campo, porque serve a um formulário. Aqui não há formulário — exporte o schema e use `safeParse` direto.
+
+- [ ] **Passo 4: escrever as três actions**
+
+Em `actions.ts`, **`'use server'` no topo e `await exigirSessao()` na primeira linha de cada action** — inclusive na de conferir, que parece inofensiva mas revela quais `CÓD` existem no banco.
 
 ```ts
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { exigirSessao } from '@/auth/sessao'
 import { obterDb } from '@/db/cliente'
 import { codsJaImportados, desfazerImportacao, gravarLote, resolverCadastros } from '@/db/importacao'
-import { loteSchema } from './validacao'
+import { codsSchema, loteSchema } from './validacao'
+
+export async function conferirCods(cods: unknown) {
+  await exigirSessao()
+  const validado = codsSchema.safeParse(cods)
+  if (!validado.success) return { ok: false as const, erro: validado.error.issues[0].message }
+  const existentes = await codsJaImportados(obterDb(), validado.data)
+  return { ok: true as const, jaImportados: [...existentes] }
+}
 
 export async function gravarLoteAction(lote: unknown) {
   await exigirSessao()
@@ -1230,15 +1385,36 @@ export async function gravarLoteAction(lote: unknown) {
   if (!validado.success) {
     return { ok: false as const, erro: validado.error.issues[0].message }
   }
-  const db = obterDb()
-  const mapas = await resolverCadastros(
-    db,
-    validado.data.map((l) => l.pessoa),
-    validado.data.map((l) => l.categoria),
-  )
-  return { ok: true as const, gravados: await gravarLote(db, validado.data, mapas) }
+  try {
+    const db = obterDb()
+    const mapas = await resolverCadastros(
+      db,
+      validado.data.map((l) => l.pessoa),
+      validado.data.map((l) => l.categoria),
+    )
+    const gravados = await gravarLote(db, validado.data, mapas)
+    revalidatePath('/lancamentos')
+    return { ok: true as const, gravados }
+  } catch {
+    // Sem try/catch, uma queda do Neon no lote 5 vira erro não tratado de Server Action
+    // e a tela perde a leitura inteira. Assim ela consegue oferecer "tentar de novo".
+    return { ok: false as const, erro: 'Não foi possível gravar este lote. Tente de novo.' }
+  }
+}
+
+export async function desfazerAction() {
+  await exigirSessao()
+  try {
+    const apagados = await desfazerImportacao(obterDb())
+    revalidatePath('/lancamentos')
+    return { ok: true as const, apagados }
+  } catch {
+    return { ok: false as const, erro: 'Não foi possível desfazer a importação.' }
+  }
 }
 ```
+
+O `revalidatePath` não é enfeite: sem ele, `/lancamentos` continuaria mostrando o cache de rota depois de gravar 4.805 lançamentos. É o que `marcarRecebidos` já faz em `src/app/(app)/lancamentos/actions.ts`.
 
 - [ ] **Passo 5: rodar e ver passar**
 
@@ -1289,16 +1465,26 @@ Regras da tela:
 - **Nada é gravado antes da confirmação.** O botão da etapa 2 diz o que vai acontecer, com o número: "Gravar 4.802 lançamentos".
 - Progresso com `<progress>` ou `role="progressbar"` e texto "lote 4 de 10" — não só a barra.
 - Problemas e avisos em listas separadas, cada item com o número da linha do Excel.
-- **Avise antes de começar** que sair da página no meio faz perder a leitura e exige reescolher o arquivo (spec §11) — o arquivo só existe na memória do navegador.
+- **Quando um lote falhar** (a action devolve `{ ok: false, erro }`): parar o laço ali, mostrar o `erro` e quantos lotes entraram — "gravados 4 de 10" — e oferecer **retomar**, que refaz do lote 1. Retomar é seguro porque a gravação é idempotente: os lotes que já entraram são ignorados. Nunca continuar para o lote seguinte depois de uma falha.
+- **Aviso antes de começar**, com este texto: *"Não feche nem saia desta página durante a importação. A planilha é lida no seu aparelho e não fica guardada em lugar nenhum — se você sair, vai precisar escolher o arquivo de novo."*
 - Alvo de toque 44×44px; erro com `aria-invalid` e `aria-describedby`; `aria-live="polite"` na região do progresso.
 - Estado vazio que ensina, não que reclama.
 - Ícones `lucide-react`, nunca emoji.
+- Para fatiar em lotes, importe `TAMANHO_DO_LOTE` de `src/importacao/lotes.ts` — **não** de `src/db/importacao.ts`, que arrastaria o Drizzle e o schema inteiro para o pacote do navegador.
 
-- [ ] **Passo 3: a navegação**
+- [ ] **Passo 3: desfazer importação**
 
-Em `src/components/navegacao.tsx`, os quatro itens com ícones `lucide-react`: início (`Home`), lançamentos (`List`), lançar (`Plus`), importar (`Upload`). O `＋` de texto sai. Mantenha o `pb-[env(safe-area-inset-bottom)]`, que existe por causa da barra de gestos do iPhone.
+Entrada discreta, **fora do caminho feliz** — no rodapé da etapa 4 ou num menu, nunca ao lado do botão de gravar. Ao tocar, uma confirmação **escrita**: o dono digita a palavra `APAGAR` para liberar o botão, que diz quantos lançamentos serão removidos. Chama `desfazerAction` e mostra o resultado.
 
-- [ ] **Passo 4: conferir no navegador**
+É a mitigação do risco nº 1 da spec §15 e o que o critério de aceite 10 verifica. Sem essa tela, `desfazerImportacao` e `desfazerAction` existem e não têm como ser usados: um erro de tradução exigiria apagar o banco à mão.
+
+- [ ] **Passo 4: a navegação**
+
+Em `src/components/navegacao.tsx`, os itens com ícones `lucide-react`: lançamentos (`List`), lançar (`Plus`), importar (`Upload`). O `＋` de texto sai. Mantenha o `pb-[env(safe-area-inset-bottom)]`, que existe por causa da barra de gestos do iPhone.
+
+**Três itens neste plano, não quatro.** O painel ("Início") só nasce no Plano A2: hoje `src/app/page.tsx` apenas redireciona para `/lancamentos`, e como `/` está **fora** do grupo `(app)`, a `Navegacao` nem é renderizada lá — um item "Início" ficaria com `aria-current` que nunca casa. O quarto item entra junto com o painel.
+
+- [ ] **Passo 5: conferir no navegador**
 
 ```bash
 npm run dev
@@ -1306,7 +1492,7 @@ npm run dev
 
 Confira, com a janela estreita (375px) e larga: a barra inferior não cobre conteúdo · dá para percorrer tudo só com o teclado, com foco visível · tema claro e escuro · nenhuma rolagem horizontal. Sem a planilha real ainda — a Tarefa 12 faz isso.
 
-- [ ] **Passo 5: commitar**
+- [ ] **Passo 6: commitar**
 
 ```bash
 npm test && npm run lint && npm run typecheck && npm run build
@@ -1344,7 +1530,9 @@ Abra `/importar` e envie o `USO_CARTÃO.xlsx`, que fica **fora do repositório**
 
 - linhas lidas: **4.805**
 - com problema: espera-se **0**. Se aparecer algum, leia o motivo antes de confirmar — pode ser um caso que a Tarefa 6 não previu.
-- avisos: espera-se **433** de arredondamento, **3** de valor zero e **4** de SUBTOTAL.
+- avisos: espera-se **433** de arredondamento, **3** de valor zero, e **cerca de 4** de SUBTOTAL.
+
+Sobre o último: se vierem dezenas ou centenas de avisos de SUBTOTAL, o problema é a **tolerância** da Tarefa 6, não a sua planilha — a fórmula do Excel calcula sobre o valor sem arredondar e diverge por centavos em toda linha de mais de duas casas. Nesse caso, pare, ajuste a tolerância e importe depois.
 
 Se os números baterem, confirme.
 
@@ -1356,7 +1544,17 @@ Abra `/lancamentos` no mês corrente e compare o total com o da aba GASTOS filtr
 
 Envie o **mesmo arquivo** de novo. Esperado na etapa 2: **4.805 já importadas, 0 novas**. Confirme e verifique que a contagem de lançamentos no banco não mudou — é o critério de aceite 3.
 
-- [ ] **Passo 5: testar no celular**
+- [ ] **Passo 5: testar o desfazer**
+
+Antes de desfazer, crie **um lançamento manual** pela tela de lançar, para provar que ele sobrevive.
+
+Use o desfazer importação e confirme: os 4.805 sumiram, o lançamento manual continua lá, e as pessoas e categorias continuam cadastradas (é o combinado da spec §6.7). Depois importe de novo e confira que os 4.805 voltaram. É o critério de aceite 10, e é a única vez que esse caminho é exercitado de ponta a ponta.
+
+- [ ] **Passo 6: testar o "marcar recebido" contra o reenvio**
+
+Marque um lançamento importado como recebido. Envie a planilha de novo. Confirme que ele **continua recebido** — a planilha traz `PAGO?` vazio para essa linha, e é o `DO NOTHING` que impede a sobrescrita. É o critério de aceite 4 e a razão de ser da decisão D1.
+
+- [ ] **Passo 7: testar no celular**
 
 ```bash
 npm run dev -- --hostname 0.0.0.0
@@ -1364,11 +1562,11 @@ npm run dev -- --hostname 0.0.0.0
 
 Abra pelo IP do computador na mesma rede Wi-Fi. Percorra o assistente com uma mão só.
 
-- [ ] **Passo 6: documentar**
+- [ ] **Passo 8: documentar**
 
 O `ajudante` acrescenta ao `README.md`: como importar a planilha, o que cada etapa mostra, como desfazer, e o comando `--hostname 0.0.0.0` para testar no celular. Sem inventar comportamento: só descrever o que existe.
 
-- [ ] **Passo 7: commitar**
+- [ ] **Passo 9: commitar**
 
 ```bash
 git add README.md
