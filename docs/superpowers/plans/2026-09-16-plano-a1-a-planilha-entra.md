@@ -1205,7 +1205,10 @@ Spec §6.6 e §6.7.
 - Produz:
 
 ```ts
+// Em src/importacao/lotes.ts (NÃO em db/importacao.ts — ver as armadilhas do passo 3):
 export const TAMANHO_DO_LOTE = 500
+
+// Em src/db/importacao.ts:
 export async function codsJaImportados(db: Db, cods: number[]): Promise<Set<number>>
 export async function resolverCadastros(db: Db, pessoas: string[], categorias: string[]):
   Promise<{ pessoas: Map<string, number>; categorias: Map<string, number> }>
@@ -1346,9 +1349,12 @@ npx vitest run "src/app/(app)/importar/validacao.test.ts"
 
 - [ ] **Passo 3: escrever o esquema**
 
-Em `validacao.ts`, espelhe `LancamentoDaPlanilha` com Zod, com `message` em português em **cada** regra — o Zod responde em inglês por padrão, e um POST direto com tipo errado receberia a mensagem dele.
+Em `validacao.ts`, exporte **dois** schemas, com `message` em português em **cada** regra — o Zod responde em inglês por padrão, e um POST direto com tipo errado receberia a mensagem dele:
 
-Este esquema é a única coisa entre um POST forjado e o banco, então os tetos numéricos não são opcionais:
+- **`loteSchema`** — array de `LancamentoDaPlanilha`, espelhando o tipo campo a campo.
+- **`codsSchema`** — array de inteiros ≥ 1, também com `.max(TAMANHO_DO_LOTE)`. Sem esse teto, `conferirCods` aceitaria um `inArray` de tamanho arbitrário vindo de fora.
+
+Esses schemas são a única coisa entre um POST forjado e o banco, então os tetos numéricos não são opcionais:
 
 - `valorCentavos`: inteiro entre −2.147.483.647 e 2.147.483.647 (é `integer` no Postgres). O arquivo `src/app/(app)/lancamentos/novo/validacao.ts` já faz isso, com comentário — copie o limite de lá.
 - `parcelaAtual` e `qtdParcelas`: inteiros até **32.767** (`smallint`).
