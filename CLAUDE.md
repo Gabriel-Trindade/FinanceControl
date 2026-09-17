@@ -22,6 +22,9 @@ Ao criar ou atualizar qualquer CLAUDE.md de projeto (inclusive via /init), copie
 ## Onde está cada coisa
 - **Spec do Núcleo (fonte da verdade das regras):** `docs/superpowers/specs/2026-09-14-nucleo-design.md`
 - **Planos de implementação:** `docs/superpowers/plans/`
+- **PRD em aberto (próxima direção do produto):** `docs/prd/2026-09-16-planilha-primeiro.md`
+- **Pendências deixadas pelo Plano 1:** `docs/pendencias-plano-2.md`
+- **Sistema de design:** `design-system/financecontrol/MASTER.md` (gerado pela skill) e `AJUSTES-DO-PROJETO.md` (o que o projeto decide diferente; tem prioridade)
 - **Referências sem dados pessoais:** `docs/referencias/planilha-gastos.md` e `docs/referencias/fatura-santander.md`
 
 ## Stack
@@ -58,6 +61,8 @@ Detalhes no README.md.
 ## Fluxo de trabalho (SDD)
 Superpowers + papéis definidos em `~/.claude/CLAUDE.md`: **Opus** (Cérebro) planeja e revisa,
 **Sonnet** (`construtor`) implementa com TDD, **Haiku** (`ajudante`) documenta e comenta.
+Tela é com o **Sonnet** (`designer`): ele usa a skill `ui-ux-pro-max` e o sistema de design acima, e não
+mexe em regra de negócio, schema nem autenticação — isso volta para o Cérebro.
 
 ## Roteiro
 1. **Núcleo**: Plano 1 (fundação, login, lançar, deploy) → Plano 2 (telas completas, preparar mês, CSV, PWA)
