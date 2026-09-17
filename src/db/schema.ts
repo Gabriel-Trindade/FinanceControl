@@ -82,6 +82,10 @@ export const lancamentos = pgTable(
       sql`(${t.recorrente} and ${t.qtdParcelas} is null) or (not ${t.recorrente} and ${t.qtdParcelas} is not null and ${t.qtdParcelas} >= ${t.parcelaAtual})`,
     ),
     check('lancamentos_pago_em_so_com_sim', sql`${t.pagoEm} is null or ${t.pagamento} = 'SIM'`),
+    // NULL passa direto (lançamento manual sem CÓD); só um valor preenchido menor que 1 é
+    // recusado. Ancorado no banco como os outros CHECKs da tabela — a spec §6.2 pede "inteiro
+    // ≥ 1", e o leitor/Zod da Tarefa 10 não são a única linha de defesa.
+    check('lancamentos_cod_planilha_positivo', sql`${t.codPlanilha} >= 1`),
     index('lancamentos_mes_fatura_idx').on(t.mesFatura),
     index('lancamentos_pessoa_pagamento_idx').on(t.pessoaId, t.pagamento),
     // Índice simples, não parcial: o Postgres trata cada NULL como distinto dos outros,

@@ -1,5 +1,5 @@
 {
-  "id": "987be4d4-c351-42c6-93f2-e66312f1a3c6",
+  "id": "0c3f7f23-2959-48c7-89ab-03061cf4845e",
   "prevId": "8487aec1-3708-401a-a728-22aa00e55cfa",
   "version": "7",
   "dialect": "postgresql",
@@ -299,6 +299,10 @@
         "lancamentos_pago_em_so_com_sim": {
           "name": "lancamentos_pago_em_so_com_sim",
           "value": "\"lancamentos\".\"pago_em\" is null or \"lancamentos\".\"pagamento\" = 'SIM'"
+        },
+        "lancamentos_cod_planilha_positivo": {
+          "name": "lancamentos_cod_planilha_positivo",
+          "value": "\"lancamentos\".\"cod_planilha\" >= 1"
         }
       },
       "isRLSEnabled": false

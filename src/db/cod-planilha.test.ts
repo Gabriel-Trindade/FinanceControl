@@ -74,4 +74,15 @@ describe('cod_planilha', () => {
       await fechar()
     }
   })
+
+  it('recusa CÓD menor que 1', async () => {
+    const { db, fechar } = await criarBancoDeTeste()
+    try {
+      await expect(inserir(db, 0)).rejects.toMatchObject({
+        cause: { constraint: 'lancamentos_cod_planilha_positivo' },
+      })
+    } finally {
+      await fechar()
+    }
+  })
 })
