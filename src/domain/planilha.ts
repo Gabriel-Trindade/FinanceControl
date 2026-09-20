@@ -256,3 +256,46 @@ export function traduzirLinha(celulas: Celula[]): TraducaoDeLinha {
     avisos,
   }
 }
+
+// ===== Tarefa 7: traduzir a planilha inteira =====
+
+export type OcorrenciaDaPlanilha = { linha: number; motivo: string }
+
+export type ResultadoDaTraducao = {
+  lancamentos: LancamentoDaPlanilha[]
+  problemas: OcorrenciaDaPlanilha[]
+  avisos: OcorrenciaDaPlanilha[]
+}
+
+/**
+ * Traduz as linhas de dados da aba GASTOS (sem o cabeçalho).
+ * O número da linha no resultado é o do Excel: índice 0 é a linha 2.
+ */
+export function traduzirPlanilha(linhas: Celula[][]): ResultadoDaTraducao {
+  const lancamentos: LancamentoDaPlanilha[] = []
+  const problemas: OcorrenciaDaPlanilha[] = []
+  const avisos: OcorrenciaDaPlanilha[] = []
+  const codsVistos = new Set<number>()
+
+  linhas.forEach((celulas, indice) => {
+    const linha = indice + 2
+    const traducao = traduzirLinha(celulas)
+
+    if (!traducao.ok) {
+      problemas.push({ linha, motivo: traducao.motivo })
+      return
+    }
+    // CÓD repetido dentro do próprio arquivo: o primeiro vale, o segundo é problema.
+    // Sem isso, o INSERT quebraria no índice único de cod_planilha só na hora de gravar.
+    if (codsVistos.has(traducao.lancamento.codPlanilha)) {
+      problemas.push({ linha, motivo: `CÓD ${traducao.lancamento.codPlanilha} repetido no arquivo` })
+      return
+    }
+
+    codsVistos.add(traducao.lancamento.codPlanilha)
+    lancamentos.push(traducao.lancamento)
+    for (const motivo of traducao.avisos) avisos.push({ linha, motivo })
+  })
+
+  return { lancamentos, problemas, avisos }
+}

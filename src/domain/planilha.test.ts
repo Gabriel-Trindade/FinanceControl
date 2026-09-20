@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { traduzirLinha, valorParaCentavos, type Celula } from './planilha'
+import { traduzirLinha, traduzirPlanilha, valorParaCentavos, type Celula } from './planilha'
 
 describe('valorParaCentavos', () => {
   it('converte número inteiro e com duas casas', () => {
@@ -226,5 +226,35 @@ describe('traduzirLinha', () => {
     ['PAGO? com valor estranho', { 12: 'TALVEZ' }],
   ])('recusa: %s', (_nome, mudancas) => {
     expect(traduzirLinha(linha(mudancas)).ok).toBe(false)
+  })
+})
+
+describe('traduzirPlanilha', () => {
+  it('separa o que entra do que tem problema', () => {
+    const r = traduzirPlanilha([linha({ 0: 1 }), linha({ 0: 2, 5: '' }), linha({ 0: 3 })])
+    expect(r.lancamentos.map((l) => l.codPlanilha)).toEqual([1, 3])
+    expect(r.problemas).toHaveLength(1)
+  })
+
+  it('numera o problema pela linha do Excel, contando o cabeçalho', () => {
+    // linhas[0] é a primeira linha de dados, que no Excel é a linha 2.
+    const r = traduzirPlanilha([linha({ 0: 1, 5: '' })])
+    expect(r.problemas[0].linha).toBe(2)
+  })
+
+  it('recusa CÓD repetido dentro do arquivo, mantendo o primeiro', () => {
+    const r = traduzirPlanilha([linha({ 0: 7 }), linha({ 0: 7 })])
+    expect(r.lancamentos).toHaveLength(1)
+    expect(r.problemas[0].motivo).toContain('repetido')
+  })
+
+  it('junta os avisos com a linha de origem', () => {
+    const r = traduzirPlanilha([linha({ 0: 1, 6: 0 })])
+    expect(r.lancamentos).toHaveLength(1)
+    expect(r.avisos[0].linha).toBe(2)
+  })
+
+  it('planilha vazia devolve tudo vazio', () => {
+    expect(traduzirPlanilha([])).toEqual({ lancamentos: [], problemas: [], avisos: [] })
   })
 })
