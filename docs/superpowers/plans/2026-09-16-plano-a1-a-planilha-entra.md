@@ -1199,6 +1199,15 @@ git commit -m "feat: ler o .xlsx no aparelho, com cabecalho conferido"
 
 Spec §6.6 e §6.7.
 
+**Antes de começar, unifique a normalização de nome.** Hoje existem duas cópias idênticas: `normalizarNome` em `src/db/cadastros.ts` (Tarefa 1) e `normalizarCadastro` em `src/domain/planilha.ts` (Tarefa 6). A spec §6.8 diz explicitamente que é **a mesma função** — duas cópias que derivem produzem chaves de mapa diferentes dos dois lados desta tarefa, e o `INSERT` quebra com violação de `NOT NULL` no lote inteiro, sem dizer qual nome causou.
+
+A tradução não podia importar de `src/db/` (é `src/domain/` puro), então o lugar certo da função é o domínio:
+
+1. Mover `normalizarNome` para `src/domain/texto.ts`, junto de `compararNomes`, que já trata nome.
+2. `src/db/cadastros.ts` passa a importá-la de lá (pode reexportar, se algum chamador depender do caminho antigo).
+3. `src/domain/planilha.ts` passa a usá-la, e `normalizarCadastro` deixa de existir.
+4. Os testes das Tarefas 1 e 6 continuam passando sem alteração — se algum precisar mudar, a movimentação mudou comportamento e está errada.
+
 **Arquivos:**
 - Criar: `src/db/importacao.ts`
 - Criar: `src/db/importacao.test.ts`
