@@ -97,8 +97,34 @@ describe('traduzirLinha', () => {
     })
   })
 
+  it('normaliza o item em NFC', () => {
+    // "é" tem duas representações Unicode: precomposta (NFC, um só codepoint)
+    // e decomposta (NFD, "e" + acento agudo combinante). Colar a forma NFD
+    // direto no arquivo se recompõe para NFC ao salvar (nota de memória do
+    // projeto), o que provaria o teste mesmo sem normalização nenhuma —
+    // por isso a NFD é derivada em tempo de execução a partir da NFC.
+    const itemNFC = 'Café'
+    const itemNFD = itemNFC.normalize('NFD')
+    expect(itemNFD).not.toBe(itemNFC) // sanidade: as duas formas são bytes diferentes
+    const r = traduzirLinha(linha({ 5: itemNFD }))
+    expect(r.ok && r.lancamento.item).toBe(itemNFC)
+  })
+
+  it('colapsa espaço repetido em categoria e origem', () => {
+    const r = traduzirLinha(linha({ 4: 'Casa  e  Lar', 11: 'Ana   Maria' }))
+    expect(r.ok && r.lancamento.categoria).toBe('Casa e Lar')
+    expect(r.ok && r.lancamento.pessoa).toBe('Ana Maria')
+  })
+
   it('∞ em QTD PARCELAS vira recorrente sem quantidade', () => {
     const r = traduzirLinha(linha({ 8: INFINITO }))
+    expect(r.ok && r.lancamento.recorrente).toBe(true)
+    expect(r.ok && r.lancamento.qtdParcelas).toBeNull()
+  })
+
+  it('∞ com espaços ao redor também vira recorrente', () => {
+    // A célula pode chegar com espaço sobrando, igual a qualquer texto do Excel.
+    const r = traduzirLinha(linha({ 8: `  ${INFINITO}  ` }))
     expect(r.ok && r.lancamento.recorrente).toBe(true)
     expect(r.ok && r.lancamento.qtdParcelas).toBeNull()
   })
@@ -121,8 +147,23 @@ describe('traduzirLinha', () => {
     expect(r.lancamento.pagamento).toBe('PERDOADO')
   })
 
-  it('lê a data em UTC, para o dia 5 não cair no mês anterior', () => {
-    const r = traduzirLinha(linha({ 1: new Date(Date.UTC(2026, 0, 5)) }))
+  it('PAGO? ausente (linha mais curta que 14 células) vira NAO', () => {
+    // Se a biblioteca de leitura truncar células vazias à direita, a célula
+    // chega como undefined, não null — os dois precisam se comportar igual.
+    const celulas = linha().slice(0, 12) // sem índice 12 (PAGO?) nem 13 (SITUAÇÃO)
+    const r = traduzirLinha(celulas)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.lancamento.pagamento).toBe('NAO')
+  })
+
+  it('lê a data em UTC, para o dia 1 não cair em dezembro do ano anterior', () => {
+    // O dia 5 (usado no restante deste arquivo) nunca muda de mês nem em fuso
+    // negativo: 5 à meia-noite UTC menos algumas horas ainda cai no dia 4, mesmo
+    // mês. Só o dia 1 prova a diferença entre getUTC*/getters locais — um fuso
+    // negativo (ex.: America/Sao_Paulo, UTC−3) leria 31/dez/2025 nos getters
+    // locais, errando mês E ano.
+    const r = traduzirLinha(linha({ 1: new Date(Date.UTC(2026, 0, 1)) }))
     expect(r.ok && r.lancamento.mesFatura).toBe('2026-01-01')
   })
 
@@ -169,13 +210,18 @@ describe('traduzirLinha', () => {
   it.each([
     ['CÓD ausente', { 0: null }],
     ['CÓD zero', { 0: 0 }],
+    ['CÓD acima do limite do integer', { 0: 3000000000 }],
     ['VENCIMENTO não é data', { 1: 'setembro' }],
     ['ITEM vazio', { 5: '   ' }],
     ['VALOR não numérico', { 6: 'muito' }],
+    ['VALOR acima do limite do integer (em centavos)', { 6: 99999999.99 }],
     ['CATEGORIA vazia', { 4: '' }],
     ['ORIGEM vazia', { 11: '' }],
+    ['PARCELA ATUAL negativa', { 7: -1 }],
     ['QTD PARCELAS vazia', { 8: null }],
+    ['QTD PARCELAS não inteira', { 8: 3.5 }],
     ['QTD PARCELAS menor que PARCELA ATUAL', { 7: 5, 8: 3 }],
+    ['PARCELA ATUAL 0 com QTD PARCELAS 0', { 7: 0, 8: 0 }],
     ['PARCELA ATUAL acima de smallint', { 7: 40000, 8: 40000 }],
     ['PAGO? com valor estranho', { 12: 'TALVEZ' }],
   ])('recusa: %s', (_nome, mudancas) => {

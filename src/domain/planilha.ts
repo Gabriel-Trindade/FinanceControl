@@ -59,14 +59,24 @@ export type TraducaoDeLinha =
 // gerar em tempo de execução tira qualquer dúvida sobre o que fica no arquivo.
 const INFINITO = String.fromCharCode(0x221e)
 
+// Teto do tipo `integer` do Postgres (2^31 − 1). cod_planilha e valor_centavos
+// são `integer` no schema; acima disto o INSERT falha com "integer out of
+// range" e derruba o lote inteiro — o mesmo argumento que torna o smallint
+// (parcela_atual/qtd_parcelas, abaixo) problema em vez de aviso. Hoje
+// inalcançável nos dados reais (CÓD vai a 4805, valor máximo R$ 7.000), mas a
+// guarda custa uma linha e a razão de existir é idêntica à do smallint.
+const MAX_INTEGER = 2147483647
+
 // Uma frase por motivo, escrita antes da implementação (o dono lê este texto na
 // tela de conferência). A ORDEM é a da spec §6.4: quando uma linha tem dois
 // defeitos, vence o primeiro da lista, e traduzirLinha checa nesta sequência.
 const MOTIVO = {
   cod: 'CÓD ausente, não numérico ou menor que 1',
+  codAcimaDoLimite: `CÓD acima do limite do banco (máximo ${MAX_INTEGER})`,
   vencimento: 'VENCIMENTO ausente ou não é uma data',
   item: 'ITEM vazio',
   valor: 'VALOR ausente ou não numérico',
+  valorAcimaDoLimite: `VALOR acima do limite do banco em centavos (máximo ${MAX_INTEGER})`,
   categoria: 'CATEGORIA vazia',
   origem: 'ORIGEM vazia',
   parcelaAtual: 'PARCELA ATUAL ausente, não numérica ou negativa',
@@ -113,7 +123,11 @@ function normalizarItem(celula: Celula): string {
 
 /** PAGO?: vazio (ou ausente) é NAO; SIM e PERDOADO passam direto; o resto é inválido. */
 function interpretarPagamento(celula: Celula): Pagamento | null {
-  if (celula === null) return 'NAO'
+  // "== null" (dois iguais) de propósito: pega null E undefined. Uma linha
+  // com menos de 14 células (ex.: biblioteca de leitura truncando células
+  // vazias à direita) chega aqui como undefined, e ausência deve significar
+  // "vazio" — igual a uma célula null — não "problema".
+  if (celula == null) return 'NAO'
   if (typeof celula !== 'string') return null
   const texto = celula.trim()
   if (texto === '') return 'NAO'
@@ -143,6 +157,7 @@ export function traduzirLinha(celulas: Celula[]): TraducaoDeLinha {
 
   const codPlanilha = celulaParaInteiro(celulas[0])
   if (codPlanilha === null || codPlanilha <= 0) return problema(MOTIVO.cod)
+  if (codPlanilha > MAX_INTEGER) return problema(MOTIVO.codAcimaDoLimite)
 
   const vencimento = celulas[1]
   if (!(vencimento instanceof Date) || Number.isNaN(vencimento.getTime())) {
@@ -159,6 +174,7 @@ export function traduzirLinha(celulas: Celula[]): TraducaoDeLinha {
       ? valorParaCentavos(valorBruto)
       : null
   if (valorCentavos === null) return problema(MOTIVO.valor)
+  if (Math.abs(valorCentavos) > MAX_INTEGER) return problema(MOTIVO.valorAcimaDoLimite)
 
   const categoria = normalizarCadastro(celulas[4])
   if (!categoria) return problema(MOTIVO.categoria)
