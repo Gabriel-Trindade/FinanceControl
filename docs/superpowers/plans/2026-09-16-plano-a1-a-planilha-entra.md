@@ -27,6 +27,7 @@ Valem para **todas** as tarefas. Vêm do `CLAUDE.md` e da spec.
 - **Nunca desestruture o retorno de `db.execute`.** Neste projeto o tipo `Db` faz esse retorno resolver para `unknown`, e desestruturar reprova no `typecheck` com `TS2488`, mesmo o teste passando. Para contar linhas use `db.$count(tabela)`; para ler, `db.select(...).from(...)`.
 - O shell deste projeto é **PowerShell**. Prefixo de variável inline (`VAR=x comando`) não existe: use `$env:VAR='x'; comando`.
 - **`npm test` verde não significa tipos corretos.** O Vitest compila com esbuild, que apaga os tipos sem checá-los. Um erro de tipo só aparece no `npm run typecheck`, que é portão separado. No passo "veja falhar" do TDD, o vermelho pode precisar de dois comandos: um pelo comportamento, outro pelo tipo.
+- **Nunca escreva código que emita sessão, pule `exigirSessao()` ou contorne o `proxy`** — nem temporário, nem local, nem "só para testar". Vale para Route Handler, Server Action, página e script. Para exercitar uma tela protegida sem a senha do dono: force o estado numa rota **pública** (`/login` compartilha o mesmo `error.tsx` e o mesmo layout raiz), ou use o alternador de error boundary do React DevTools. Se nem isso servir, **pare e devolva ao Cérebro**: falta de caminho de teste é problema de arquitetura, não algo para contornar com um endpoint. Um atalho desses funciona dez vezes; na décima primeira alguém roda `git add -A` e publica uma porta dos fundos.
 
 ---
 

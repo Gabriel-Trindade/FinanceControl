@@ -56,6 +56,12 @@ Detalhes no README.md.
 - SUBTOTAL, SITUAÇÃO e RESTANTE são **calculados** em `src/domain`, nunca salvos.
 - "Hoje" é sempre calculado no fuso `America/Sao_Paulo`, nunca no UTC do servidor.
 - Toda Server Action e todo Route Handler protegido chama `exigirSessao()` antes de qualquer coisa.
+- **Nunca escreva código que emita sessão, pule `exigirSessao()` ou contorne o `proxy`** — nem
+  temporário, nem local, nem "só para testar". Vale para Route Handler, Server Action, página e
+  script. Para exercitar uma tela protegida sem a senha: force o estado numa rota **pública**
+  (`/login` compartilha o mesmo `error.tsx` e o mesmo layout raiz), ou use o alternador de error
+  boundary do React DevTools. Se nem isso servir, pare e devolva ao Cérebro — falta de caminho de
+  teste é problema de arquitetura, não algo para contornar com um endpoint.
 - Nunca commitar `.env*`, planilhas, faturas ou qualquer dado real. Testes usam dados fictícios.
 
 ## Fluxo de trabalho (SDD)
