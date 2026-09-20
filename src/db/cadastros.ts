@@ -1,19 +1,14 @@
 import { eq, sql } from 'drizzle-orm'
-import { compararNomes } from '@/domain/texto'
+import { compararNomes, normalizarNome } from '@/domain/texto'
 import { categorias, pessoas } from './schema'
 import type { Db } from './tipos'
 
 export type ItemCadastro = { id: number; nome: string }
 
-/**
- * "  Ana   Maria " → "Ana Maria", já em forma Unicode NFC.
- * O NFC não é enfeite: "é" pode ser gravado como um caractere ou como "e" + acento
- * combinante. São iguais na tela, mas o índice pessoas_nome_unico compara bytes —
- * sem normalizar, o mesmo nome vindo do Excel viraria uma segunda pessoa.
- */
-export function normalizarNome(nome: string): string {
-  return nome.normalize('NFC').trim().replace(/\s+/g, ' ')
-}
+// Reexportado: a função vive em src/domain/texto.ts (spec §6.8, é a mesma usada pela
+// tradução da planilha), mas outros arquivos deste projeto importam normalizarNome
+// daqui — o caminho antigo continua funcionando.
+export { normalizarNome }
 
 /** Pessoas que aparecem nas listas de escolha, em ordem alfabética. */
 export async function listarPessoasAtivas(db: Db): Promise<ItemCadastro[]> {

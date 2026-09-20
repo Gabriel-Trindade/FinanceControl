@@ -1,4 +1,5 @@
 import { calcularSubtotal, type Pagamento } from './lancamento'
+import { normalizarNome } from './texto'
 
 // O número da célula chega como texto ("1234.56", com ponto decimal do XLSX) ou já
 // como number. Os dois caminhos existem porque o read-excel-file pode entregar
@@ -105,16 +106,6 @@ function celulaParaInteiro(celula: Celula): number | null {
   return null
 }
 
-/**
- * CATEGORIA e ORIGEM seguem a mesma regra de `normalizarNome`
- * (src/db/cadastros.ts), mas sem importar de lá: este módulo é domain puro e
- * não pode depender do módulo de banco.
- */
-function normalizarCadastro(celula: Celula): string {
-  if (typeof celula !== 'string') return ''
-  return celula.normalize('NFC').trim().replace(/\s+/g, ' ')
-}
-
 /** ITEM leva NFC + trim, mas sem colapsar espaço interno (diferente de pessoa/categoria). */
 function normalizarItem(celula: Celula): string {
   if (typeof celula !== 'string') return ''
@@ -176,9 +167,11 @@ export function traduzirLinha(celulas: Celula[]): TraducaoDeLinha {
   if (valorCentavos === null) return problema(MOTIVO.valor)
   if (Math.abs(valorCentavos) > MAX_INTEGER) return problema(MOTIVO.valorAcimaDoLimite)
 
-  const categoria = normalizarCadastro(celulas[4])
+  // CATEGORIA e ORIGEM usam normalizarNome (a mesma função de src/db/cadastros.ts,
+  // spec §6.8), com a guarda de tipo aqui porque a célula pode não ser string.
+  const categoria = typeof celulas[4] === 'string' ? normalizarNome(celulas[4]) : ''
   if (!categoria) return problema(MOTIVO.categoria)
-  const pessoa = normalizarCadastro(celulas[11])
+  const pessoa = typeof celulas[11] === 'string' ? normalizarNome(celulas[11]) : ''
   if (!pessoa) return problema(MOTIVO.origem)
 
   const parcelaAtualBruta = celulaParaInteiro(celulas[7])
