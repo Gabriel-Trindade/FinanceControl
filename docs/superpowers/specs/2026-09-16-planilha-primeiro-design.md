@@ -191,7 +191,9 @@ casas e 393 negativos, é um erro que aconteceria de verdade.
 
 - **Texto** (o número como está escrito no arquivo): conversão decimal pura — separar sinal, parte
   inteira e parte decimal; completar ou arredondar a decimal para dois dígitos, **meio para longe do
-  zero**; montar o inteiro. Sem passar por ponto flutuante em momento algum.
+  zero**; montar o inteiro. Olhar só a terceira casa é matematicamente suficiente, e foi verificado
+  em 2 milhões de valores. (A montagem final usa aritmética de ponto flutuante, mas é exata até
+  9×10¹³ — dez ordens de grandeza acima do máximo real de R$ 7.000,00.)
 - **Número:** limpar o ruído binário antes de arredondar, com
   `Math.round(Number((Math.abs(v) * 100).toFixed(6)))`, e aplicar o sinal depois.
 
@@ -200,7 +202,20 @@ toda célula numérica como texto — o caminho mais exato. Mas ela vale para **
 numéricas, e no formato XLSX uma data é um número com formato de data: não está verificado se a
 detecção de datas sobrevive a um `parseNumber` próprio. O tradutor funcionar nos dois formatos tira
 essa incerteza do caminho crítico. Se uma medição futura mostrar que `parseNumber` é seguro, é só
-ligá-lo no leitor — o tradutor não muda.
+ligá-lo no leitor — **com uma ressalva medida:** os dois ramos divergem em um centavo numa janela de
+cerca de 5×10⁻⁹ logo abaixo do meio centavo (ex.: `1.004999999` dá 100 pelo texto e 101 pelo número,
+porque o `toFixed(6)` arredonda para `100.500000`). Testadas 9,8 milhões de divisões
+`total ÷ parcelas`, nenhuma cai nessa janela: os artefatos binários de divisão caem **acima** da
+fronteira, não abaixo. É teoricamente alcançável, praticamente não.
+
+**O tradutor recusa o formato brasileiro de propósito.** `'1234,56'`, `'1.234,56'` e `'R$ 1.234,56'`
+devolvem `null` e viram "problema" com o número da linha (6.4). Isso é correto: quem digita no
+formulário passa por `paraCentavos` (`src/domain/dinheiro.ts`), que aceita vírgula e recusa ponto
+decimal justamente porque no Brasil o ponto separa milhar. **As duas funções não devem ser
+unificadas:** uma função que aceitasse ponto como milhar *e* como decimal tornaria `'1.234'` ambíguo
+entre R$ 1.234,00 e R$ 1,23 — erro de mil vezes o valor, e silencioso. A única linha repetida entre
+elas é o tratamento do sinal; extrair isso acoplaria dois módulos independentes para economizar uma
+expressão.
 
 O sinal é aplicado como `v < 0 ? -c : c`, nunca com `Math.sign`, que devolve `-0` e faz
 `expect(-0).toBe(0)` falhar no Vitest.
