@@ -13,11 +13,19 @@ export function valorParaCentavos(bruto: string | number): number | null {
     const centavosSemArredondar = Number(inteiro) * 100 + Number(decimal.slice(0, 2).padEnd(2, '0'))
     const terceira = Number(decimal[2] ?? '0')
     const centavos = centavosSemArredondar + (terceira >= 5 ? 1 : 0)
+    // O sinal fica de fora da conta e só é aplicado aqui no fim, sobre a
+    // magnitude já arredondada. O "!== 0" evita devolver -0 (ex.: "-0,00" ou
+    // um negativo que arredonda para zero), que quebra Object.is e sai como
+    // "-0" em JSON.
     return sinal && centavos !== 0 ? -centavos : centavos
   }
 
   if (!Number.isFinite(bruto)) return null
   // toFixed antes do round limpa o ruído binário: sem ele, 1.005 * 100 é 100.4999...
   const centavos = Math.round(Number((Math.abs(bruto) * 100).toFixed(6)))
+  // Arredonda o valor absoluto e só então aplica o sinal: Math.round(-1.5) dá -1,
+  // ou seja, na direção do zero, não para longe dele — por isso o sinal fica de
+  // fora do Math.round. O "!== 0" evita devolver -0, que quebra Object.is e sai
+  // como "-0" em JSON.
   return bruto < 0 && centavos !== 0 ? -centavos : centavos
 }

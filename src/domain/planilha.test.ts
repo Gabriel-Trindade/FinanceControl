@@ -22,11 +22,36 @@ describe('valorParaCentavos', () => {
     // expect(-0).toBe(0) falha no Vitest, porque ele usa Object.is.
     expect(Object.is(valorParaCentavos(0), 0)).toBe(true)
     expect(Object.is(valorParaCentavos('-0'), 0)).toBe(true)
+    // 0 e '-0' não passam por `bruto < 0`, então não provam a guarda do ramo
+    // número. -0.004 arredonda para zero vindo de um negativo: é o único
+    // caminho que exercita essa guarda.
+    expect(Object.is(valorParaCentavos(-0.004), 0)).toBe(true)
   })
 
   it('recusa o que não é número', () => {
     expect(valorParaCentavos('abc')).toBeNull()
     expect(valorParaCentavos('')).toBeNull()
     expect(valorParaCentavos(Number.NaN)).toBeNull()
+    // Infinity é finito? Não — e um "centavos" infinito não pode chegar ao banco.
+    expect(valorParaCentavos(Infinity)).toBeNull()
+    expect(valorParaCentavos(-Infinity)).toBeNull()
+  })
+
+  it('tolera espaço e BOM nas pontas do texto vindo do Excel', () => {
+    // Célula de texto do XLSX costuma vir com espaço sobrando. O BOM (marca de
+    // ordem de byte, U+FEFF) aparece em exportações de outras planilhas.
+    // trim() remove os dois. Geramos o BOM com fromCharCode em vez de colar o
+    // caractere invisível no arquivo, para o teste continuar legível e auditável.
+    const bom = String.fromCharCode(0xfeff)
+    expect(valorParaCentavos('  12.34  ')).toBe(1234)
+    expect(valorParaCentavos(' 12.34' + bom)).toBe(1234)
+  })
+
+  it('cobre os extremos reais da planilha e mais de duas casas decimais', () => {
+    // -8.204,99 e 7.000,00 são o mínimo e o máximo medidos nos 4.805 lançamentos.
+    expect(valorParaCentavos(-8204.99)).toBe(-820499)
+    expect(valorParaCentavos(7000)).toBe(700000)
+    // Só a terceira casa decide o arredondamento; a quarta em diante é ignorada.
+    expect(valorParaCentavos('1.2345')).toBe(123)
   })
 })
