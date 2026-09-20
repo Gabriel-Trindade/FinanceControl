@@ -231,9 +231,17 @@ describe('traduzirLinha', () => {
 
 describe('traduzirPlanilha', () => {
   it('separa o que entra do que tem problema', () => {
-    const r = traduzirPlanilha([linha({ 0: 1 }), linha({ 0: 2, 5: '' }), linha({ 0: 3 })])
-    expect(r.lancamentos.map((l) => l.codPlanilha)).toEqual([1, 3])
-    expect(r.problemas).toHaveLength(1)
+    // Duas linhas com defeito (não uma só) provam que "problemas" preserva a
+    // ordem do arquivo — um push trocado por unshift inverteria a lista sem
+    // que um único problema conseguisse flagrar isso.
+    const r = traduzirPlanilha([
+      linha({ 0: 1 }),
+      linha({ 0: 2, 5: '' }),
+      linha({ 0: 3, 5: '' }),
+      linha({ 0: 4 }),
+    ])
+    expect(r.lancamentos.map((l) => l.codPlanilha)).toEqual([1, 4])
+    expect(r.problemas.map((p) => p.linha)).toEqual([3, 4])
   })
 
   it('numera o problema pela linha do Excel, contando o cabeçalho', () => {
@@ -243,9 +251,13 @@ describe('traduzirPlanilha', () => {
   })
 
   it('recusa CÓD repetido dentro do arquivo, mantendo o primeiro', () => {
-    const r = traduzirPlanilha([linha({ 0: 7 }), linha({ 0: 7 })])
-    expect(r.lancamentos).toHaveLength(1)
-    expect(r.problemas[0].motivo).toContain('repetido')
+    // Duas linhas idênticas não provam "mantendo o primeiro": "último vence" daria
+    // o mesmo resultado. Item diferente por linha (índice 5) torna as duas
+    // distinguíveis, e o toEqual trava o texto exato do motivo e o número da
+    // linha — é o que o dono lê pra saber qual das duas abrir na planilha.
+    const r = traduzirPlanilha([linha({ 0: 7, 5: 'primeira' }), linha({ 0: 7, 5: 'segunda' })])
+    expect(r.lancamentos.map((l) => l.item)).toEqual(['primeira'])
+    expect(r.problemas).toEqual([{ linha: 3, motivo: 'CÓD 7 repetido no arquivo' }])
   })
 
   it('junta os avisos com a linha de origem', () => {
