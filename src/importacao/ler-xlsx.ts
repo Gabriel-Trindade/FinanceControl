@@ -39,6 +39,15 @@ export function conferirCabecalho(primeiraLinha: Celula[]): void {
         `"${primeiraLinha[foraDeOrdem] ?? ''}".`,
     )
   }
+  // read-excel-file preenche TODA linha (cabeçalho incluso) até a maior coluna usada em
+  // QUALQUER linha da planilha inteira, não só na linha em questão — uma célula solta na
+  // coluna O da aba GASTOS faz o cabeçalho chegar com 15 posições, não 14. A spec §6.1
+  // manda recusar dizendo o que sobrou, não só o que faltou. Tolera sobra vazia: pode ser
+  // só esse preenchimento da biblioteca, sem coluna de verdade na planilha do dono.
+  const sobrando = primeiraLinha.slice(esperadas.length).filter((c) => normalizar(c) !== '')
+  if (sobrando.length > 0) {
+    throw new ErroDeLeitura(`A planilha tem coluna a mais depois de SITUAÇÃO: ${sobrando.join(', ')}.`)
+  }
 }
 
 /** Traduz o erro da biblioteca numa mensagem que o dono entende. Separado para ter teste. */
@@ -72,6 +81,11 @@ export async function lerPlanilha(arquivo: File): Promise<Celula[][]> {
 
   let linhas: Celula[][]
   try {
+    // Cast explícito, não conveniência: o `.d.ts` da biblioteca declara
+    // `CellValue = string | number | boolean | typeof Date`, e `typeof Date` é o tipo do
+    // CONSTRUTOR `Date`, não de uma instância — bug de tipo da lib (o valor devolvido em
+    // tempo de execução é sempre uma instância de Date, medido na Tarefa 8). Não existe
+    // forma de o retorno bater estruturalmente com `Celula` sem essa conversão.
     linhas = (await modulo.readSheet(arquivo, NOME_DA_ABA)) as Celula[][]
   } catch (erro) {
     throw mapearErroDeLeitura(erro, modulo)
