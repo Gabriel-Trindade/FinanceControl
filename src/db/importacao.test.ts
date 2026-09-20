@@ -136,6 +136,85 @@ describe('gravarLote', () => {
     }
   })
 
+  it('grava cada um dos 13 campos do mapeamento com o valor da linha certa, não uma constante', async () => {
+    const { db, fechar, consultas } = await criarBancoDeTeste({ registrarConsultas: true })
+    try {
+      const mapas = await resolverCadastros(db, ['Ana', 'Beto'], ['Mercado', 'Lazer'])
+      // Ids reais do banco, para comparar a linha inteira sem adivinhar o formato
+      // interno da chave do mapa (chaveDoNome não é exportada, de propósito).
+      const anaId = (await obterOuCriarPessoa(db, 'Ana')).id
+      const betoId = (await obterOuCriarPessoa(db, 'Beto')).id
+      const mercadoId = (await obterOuCriarCategoria(db, 'Mercado')).id
+      const lazerId = (await obterOuCriarCategoria(db, 'Lazer')).id
+
+      // As duas linhas diferem em TODO campo que o mapeamento copia — valor, item,
+      // mês, pessoa, categoria, parcela, quantidade, recorrente e pagamento. Só assim
+      // um "copiei o campo errado" ou "usei uma constante" (ex.: valorCentavos: 0,
+      // ou pessoaId sempre do primeiro mapa) fica impossível de disfarçar: com as
+      // duas linhas iguais (só o CÓD diferente), uma constante bateria com uma das
+      // duas por acaso, do mesmo jeito que "CÓD repetido" da Tarefa 7 exigia item
+      // diferente por linha para provar "mantém o primeiro" de "último vence".
+      const primeiro = lancamentoDaPlanilha({
+        codPlanilha: 1, mesFatura: '2026-09-01', pessoa: 'Ana', categoria: 'Mercado',
+        item: 'Compra do mês', valorCentavos: 15050, parcelaAtual: 1, qtdParcelas: 3,
+        recorrente: false, pagamento: 'SIM',
+      })
+      const segundo = lancamentoDaPlanilha({
+        codPlanilha: 2, mesFatura: '2026-10-01', pessoa: 'Beto', categoria: 'Lazer',
+        item: 'Assinatura', valorCentavos: 2990, parcelaAtual: 7, qtdParcelas: null,
+        recorrente: true, pagamento: 'NAO',
+      })
+
+      await gravarLote(db, [primeiro, segundo], mapas)
+
+      const linhas = await db.select().from(lancamentos).orderBy(lancamentos.codPlanilha)
+      // Lista explícita dos 13 campos do mapeamento — id, criadoEm e atualizadoEm ficam
+      // de fora porque vêm do banco (default/sequência), não são o que este teste prova.
+      const gravado = linhas.map((l) => ({
+        mesFatura: l.mesFatura, dataCompra: l.dataCompra, codPlanilha: l.codPlanilha,
+        pessoaId: l.pessoaId, categoriaId: l.categoriaId, item: l.item,
+        valorCentavos: l.valorCentavos, parcelaAtual: l.parcelaAtual,
+        qtdParcelas: l.qtdParcelas, recorrente: l.recorrente, pagamento: l.pagamento,
+        pagoEm: l.pagoEm, fonte: l.fonte,
+      }))
+
+      expect(gravado).toEqual([
+        {
+          mesFatura: '2026-09-01', dataCompra: null, codPlanilha: 1,
+          pessoaId: anaId, categoriaId: mercadoId, item: 'Compra do mês',
+          valorCentavos: 15050, parcelaAtual: 1, qtdParcelas: 3, recorrente: false,
+          pagamento: 'SIM', pagoEm: null, fonte: 'planilha',
+        },
+        {
+          mesFatura: '2026-10-01', dataCompra: null, codPlanilha: 2,
+          pessoaId: betoId, categoriaId: lazerId, item: 'Assinatura',
+          valorCentavos: 2990, parcelaAtual: 7, qtdParcelas: null, recorrente: true,
+          pagamento: 'NAO', pagoEm: null, fonte: 'planilha',
+        },
+      ])
+
+      // O target do ON CONFLICT é carga útil (falha alto contra índice parcial — ver
+      // Mutação 1 do relatório — e não engole em silêncio um conflito de outra
+      // constraint), então fica fixado aqui, na consulta de verdade que gravarLote
+      // gerou, não só no comportamento (que .onConflictDoNothing() sem target não
+      // distingue, já que hoje só existe UM índice único na tabela).
+      const insercaoDoLote = consultas.find((q) => q.startsWith('insert into "lancamentos"'))
+      expect(insercaoDoLote).toContain('on conflict ("cod_planilha")')
+    } finally {
+      await fechar()
+    }
+  })
+
+  it('lote vazio não chama o banco e devolve 0', async () => {
+    const { db, fechar } = await criarBancoDeTeste()
+    try {
+      const gravados = await gravarLote(db, [], { pessoas: new Map(), categorias: new Map() })
+      expect(gravados).toBe(0)
+    } finally {
+      await fechar()
+    }
+  })
+
   it('retomada depois de falha: reenviar lotes já gravados junto com lotes novos não duplica', async () => {
     const { db, fechar } = await criarBancoDeTeste()
     try {
@@ -178,6 +257,33 @@ describe('resolverCadastros', () => {
         mapas,
       )
       expect(gravados).toBe(2)
+    } finally {
+      await fechar()
+    }
+  })
+
+  it('faz uma quantidade de consultas proporcional aos nomes distintos, não ao tamanho do array', async () => {
+    const { db, fechar, consultas } = await criarBancoDeTeste({ registrarConsultas: true })
+    try {
+      const NOMES_DE_PESSOA = ['Ana', 'Beto', 'Carla']
+      const NOMES_DE_CATEGORIA = ['Mercado', 'Lazer']
+      // 300 "linhas de planilha", só 5 nomes distintos no total — a mesma proporção
+      // (poucas dezenas contra milhares) da planilha real (spec §6.6: ~44 distintos
+      // contra 4.805 linhas). Sem o dedup (new Set) dentro de resolverCadastros, isto
+      // vira 300 + 300 idas ao banco em vez de 5; no Neon HTTP (~40ms por ida) é a
+      // diferença entre a Server Action responder e estourar o tempo.
+      const pessoas = Array.from({ length: 300 }, (_, i) => NOMES_DE_PESSOA[i % NOMES_DE_PESSOA.length])
+      const categorias = Array.from(
+        { length: 300 },
+        (_, i) => NOMES_DE_CATEGORIA[i % NOMES_DE_CATEGORIA.length],
+      )
+
+      await resolverCadastros(db, pessoas, categorias)
+
+      // obterOuCriar faz exatamente 2 consultas por nome NOVO (busca vazia + insert;
+      // a terceira busca do "??" só roda na corrida rara de duas escritas concorrentes,
+      // que não acontece aqui). 5 nomes distintos (3 pessoas + 2 categorias) × 2.
+      expect(consultas).toHaveLength((NOMES_DE_PESSOA.length + NOMES_DE_CATEGORIA.length) * 2)
     } finally {
       await fechar()
     }
