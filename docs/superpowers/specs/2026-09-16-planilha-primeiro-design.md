@@ -359,8 +359,17 @@ Duas réguas diferentes, e confundi-las tem consequência:
 simula acromatopsia, que atinge 1 em 30.000 pessoas, e quem tem protanopia **enxerga luminância
 normalmente** — degrau de brilho não resolve nada para essas pessoas.
 
-Mesmo com a paleta otimizada, nenhum par de séries chega a 3:1 de luminância **entre si**. Os gráficos
-do Plano A2 precisam parear cada série com um segundo sinal (hachura ou traço). É obrigatório.
+Mesmo com a paleta otimizada, nenhum par de séries chega a 3:1 de luminância **entre si** — medido:
+de 1,03:1 a 3,02:1. Isso tem consequência formal: a **WCAG 1.4.11 também exige 3:1 entre objetos
+gráficos adjacentes**, então duas séries que se tocam (barra empilhada, fatias vizinhas de rosca) não
+cumprem o critério só pela cor. Os gráficos do Plano A2 precisam entregar o segundo sinal — hachura por
+série, ou um traço separador entre áreas adjacentes. **Sem isso o gráfico reprova**, por mais bem
+escolhida que a paleta esteja.
+
+Aviso para quem mexer nos tokens depois: `--chart-3` no tema claro está **na borda do gamute sRGB**
+(canal azul linear em 0,00003). Qualquer ajuste que aumente o croma ou baixe a luminosidade o joga
+para fora, o navegador faz mapeamento de gamute por conta própria, e todos os números medidos deixam
+de valer.
 
 **O chip de situação não leva preenchimento tingido.** Borda e texto na cor, fundo do cartão por baixo.
 Medido: `bg-situacao-X/10` com `text-situacao-X` dá 4,41 a 4,63:1 no tema claro, e dois dos cinco ficam
