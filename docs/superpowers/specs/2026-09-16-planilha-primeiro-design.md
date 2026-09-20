@@ -144,7 +144,11 @@ entra no repositório.**
 
 | Pacote | Onde | Observação |
 |---|---|---|
-| `read-excel-file` | cliente, via `import()` dinâmico | Importar de **`read-excel-file/browser`**: o pacote não tem export padrão, só `./browser`, `./node`, `./web-worker` e `./universal`. O `import()` é dinâmico para a biblioteca só viajar até o navegador nesta tela. O build `/browser` **já usa Web Worker por dentro** ao ler o arquivo, então as 4.805 linhas não travam a interface — `/web-worker` é o caminho que **não** gera worker, e não serve aqui |
+| `read-excel-file` | cliente, via `import()` dinâmico | Importar de **`read-excel-file/browser`**: o pacote não tem export padrão, só `./browser`, `./node`, `./web-worker` e `./universal`. O `import()` é dinâmico para a biblioteca só viajar até o navegador nesta tela |
+
+**Correção de uma afirmação anterior desta spec:** escrevi aqui que o build `/browser` "já usa Web Worker por dentro", com base no README do pacote. **É falso na versão 9.3.10.** O próprio README marca essa frase como *"Previous inaccurate statement"*, e o código confirma: `parseSpreadsheetContents.js` documenta o parâmetro do worker como *"Not used"* e chama o caminho síncrono.
+
+Consequência medida: um `.xlsx` de 4.806 linhas × 14 colunas (252 KB) leva **119 ms na thread principal**, em desktop. Não é congelamento, mas **não há paralelismo nenhum** — a tela da Tarefa 11 precisa de um estado "lendo o arquivo…" antes de começar, e num celular antigo esse tempo cresce. Se algum dia virar problema medido, o caminho é o dono chamar `read-excel-file/web-worker` dentro de um Worker próprio; ele existe justamente para quem quer gerenciar o worker na mão.
 | `recharts` | cliente | Entra com `npx shadcn add chart`, que também cria `src/components/ui/chart.tsx` |
 
 ## 6. Importação da planilha
