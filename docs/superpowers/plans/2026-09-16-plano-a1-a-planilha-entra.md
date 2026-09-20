@@ -1306,7 +1306,7 @@ Uma confirmação útil, já verificada: `ON CONFLICT DO NOTHING` também lida c
 npx vitest run src/db/importacao.test.ts
 ```
 
-Esperado: 7 testes PASSAM.
+Esperado: **9** testes PASSAM — um para cada item da lista do passo 1. (Uma versão anterior deste plano dizia 7, de quando a lista tinha sete itens; os dois últimos entraram depois, na revisão da Tarefa 2.)
 
 - [ ] **Passo 5: commitar**
 
