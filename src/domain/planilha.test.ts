@@ -37,14 +37,19 @@ describe('valorParaCentavos', () => {
     expect(valorParaCentavos(-Infinity)).toBeNull()
   })
 
-  it('tolera espaço e BOM nas pontas do texto vindo do Excel', () => {
-    // Célula de texto do XLSX costuma vir com espaço sobrando. O BOM (marca de
-    // ordem de byte, U+FEFF) aparece em exportações de outras planilhas.
-    // trim() remove os dois. Geramos o BOM com fromCharCode em vez de colar o
-    // caractere invisível no arquivo, para o teste continuar legível e auditável.
+  it('tolera espaço, NBSP e BOM nas pontas do texto vindo do Excel', () => {
+    // Célula de texto do XLSX costuma vir com espaço sobrando. O NBSP (espaço
+    // não separável, U+00A0) é o mais provável dos três na prática: o Excel usa
+    // NBSP na formatação de número, e se colar numa célula, só o trim() salva
+    // a linha. O BOM (marca de ordem de byte, U+FEFF) aparece em exportações
+    // de outras planilhas. trim() remove os três. Geramos NBSP e BOM com
+    // fromCharCode em vez de colar o caractere invisível no arquivo, para o
+    // teste continuar legível e auditável.
     const bom = String.fromCharCode(0xfeff)
+    const nbsp = String.fromCharCode(0x00a0)
     expect(valorParaCentavos('  12.34  ')).toBe(1234)
     expect(valorParaCentavos(' 12.34' + bom)).toBe(1234)
+    expect(valorParaCentavos(nbsp + '12.34' + nbsp)).toBe(1234)
   })
 
   it('cobre os extremos reais da planilha e mais de duas casas decimais', () => {
