@@ -19,9 +19,12 @@ jobs:
       - run: npm test
       - run: npm run build
         env:
-          # Valores falsos, só para o build passar pela validação de src/env.ts.
-          # Nenhum deles funciona: o CI não fala com o banco nem faz login.
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          # Hoje NENHUMA rota chama obterEnv() durante o build — as 5 chamadas são todas de
+          # tempo de requisição — então o build passa mesmo sem estas quatro. Ficam como rede:
+          # no dia em que uma rota estática ler env em tempo de build, o CI falha pelo problema
+          # de verdade e não por variável faltando. Nenhuma delas é credencial: são valores
+          # inválidos de propósito.
+          DATABASE_URL: postgresql://ci:ci@banco.invalid:5432/ci
           AUTH_USUARIO: ci
           AUTH_SENHA_HASH: scrypt:16384:8:1:Y2ktc2FsLWZhbHNv:Y2ktaGFzaC1mYWxzbw
           AUTH_SEGREDO: segredo-falso-do-ci-com-mais-de-32-caracteres
