@@ -64,7 +64,16 @@ export function mapearErroDeLeitura(
     return new ErroDeLeitura(`A planilha não tem a aba "${NOME_DA_ABA}".`)
   }
   if (erro instanceof tipos.InvalidSpreadsheetError) {
-    return new ErroDeLeitura('O arquivo não é uma planilha válida, ou está protegido por senha.')
+    // A biblioteca lança este erro em situações bem diferentes entre si — arquivo corrompido
+    // ou com senha (erro de XML genérico, node_modules/read-excel-file/modules/xml/parseXml.js),
+    // célula malformada ("<c/> at row N, col M: VALUE_INVALID" etc., parseSheet.js) e <row>/<c>
+    // fora de ordem (idem) — e a mensagem fixa abaixo não distingue nenhuma delas. Repassar
+    // `erro.message` é seguro: a biblioteca nunca inclui o valor da célula nessas mensagens (só
+    // um código como VALUE_INVALID, linha e coluna — o trecho que reportaria o valor bruto está
+    // comentado no fonte de parseSheet.js), então não vaza dado do dono.
+    return new ErroDeLeitura(
+      `O arquivo não é uma planilha válida, ou está protegido por senha. Detalhe: ${erro.message}`,
+    )
   }
   if (erro instanceof tipos.InvalidInputError) {
     return new ErroDeLeitura('Não foi possível ler o arquivo. Ele precisa ser um .xlsx.')

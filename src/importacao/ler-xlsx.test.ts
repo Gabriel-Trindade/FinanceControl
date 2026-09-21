@@ -76,6 +76,22 @@ describe('mapearErroDeLeitura', () => {
     const original = new ErroDeLeitura('mensagem original')
     expect(mapearErroDeLeitura(original, m)).toBe(original)
   })
+
+  // Achado da revisão final do branch: a biblioteca lança InvalidSpreadsheetError em situações
+  // bem diferentes (arquivo corrompido/com senha, célula malformada com linha e coluna exatas,
+  // <row>/<c> fora de ordem) e todas caíam na MESMA mensagem fixa — quem lesse "protegido por
+  // senha" ia procurar senha num arquivo que não tem, enquanto a biblioteca já sabia o motivo
+  // exato. A mensagem original da biblioteca NUNCA inclui o valor da célula (só um código como
+  // "VALUE_INVALID", linha e coluna — conferido em node_modules/read-excel-file/modules/xlsx/
+  // parseSheet.js: o trecho que reportaria o valor bruto está comentado no fonte), então
+  // repassá-la não vaza dado do dono.
+  it('inclui a mensagem original da biblioteca, não só "protegido por senha"', async () => {
+    const m = await import('read-excel-file/browser')
+    const detalhe = '<c/> at row 5, col 3: VALUE_INVALID'
+    const erro = mapearErroDeLeitura(new m.InvalidSpreadsheetError(detalhe), m)
+    expect(erro.message).toContain('senha')
+    expect(erro.message).toContain(detalhe)
+  })
 })
 
 // ===== lerPlanilha =====
