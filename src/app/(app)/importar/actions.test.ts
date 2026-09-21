@@ -11,7 +11,9 @@ import { conferirCods, desfazerAction, gravarLoteAction } from './actions'
 // revalidar o cache, não deixar exceção escapar), não o comportamento de cada dependência,
 // que já tem teste próprio (Tarefa 9, src/db/importacao.test.ts).
 vi.mock('@/auth/sessao', () => ({ exigirSessao: vi.fn() }))
-vi.mock('@/db/cliente', () => ({ obterDb: vi.fn(() => ({})) }))
+// obterDb() só passa adiante para as outras dependências mockadas abaixo — nenhuma delas
+// inspeciona o valor, então não precisa devolver nada específico.
+vi.mock('@/db/cliente', () => ({ obterDb: vi.fn() }))
 vi.mock('@/db/importacao', () => ({
   codsJaImportados: vi.fn(),
   resolverCadastros: vi.fn(),
@@ -37,11 +39,14 @@ function lancamentoValido(mudancas: Partial<LancamentoDaPlanilha> = {}): Lancame
   }
 }
 
-// Limpa só o histórico de chamadas (quantas vezes, com quê), não a implementação padrão
-// configurada acima (ex.: obterDb continua devolvendo {}) — cada teste configura por cima,
-// com mockResolvedValueOnce, só o retorno que precisa.
+// vi.clearAllMocks() limpa só o histórico de chamadas — a fila de mockResolvedValueOnce/
+// mockRejectedValueOnce que um teste não consumiu (ex.: porque um bug fez a action
+// retornar cedo demais, sem chamar aquele mock) sobrevive e é consumida pelo teste
+// seguinte, atribuindo a falha ao teste errado. vi.resetAllMocks() limpa os dois; cada
+// teste configura por cima, com mockResolvedValueOnce/mockRejectedValueOnce, só o que
+// precisa — nenhum mock tem implementação padrão que precise sobreviver ao reset.
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
 })
 
 describe('conferirCods', () => {
