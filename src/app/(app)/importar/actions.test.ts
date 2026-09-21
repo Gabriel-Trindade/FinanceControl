@@ -45,12 +45,20 @@ beforeEach(() => {
 })
 
 describe('conferirCods', () => {
-  it('exige sessão antes de qualquer coisa — inclusive antes de validar', async () => {
-    vi.mocked(codsJaImportados).mockResolvedValueOnce(new Set())
+  // exigirSessao() de verdade FALHA (redirect() lança) quando não há sessão — nunca
+  // devolve undefined. Um dublê que só resolve vazio (o `vi.fn()` do vi.mock acima, por
+  // padrão) não reproduz isso: chamar "exigirSessao()" sem `await` também "seria chamado"
+  // e um `toHaveBeenCalled()` sozinho não distingue as duas coisas. Por isso aqui o dublê
+  // rejeita, como o original, e a entrada é inválida: só isso separa "a sessão foi checada
+  // e barrou antes de mais nada" (a chamada inteira rejeita, sem chegar na validação) de
+  // "a sessão foi chamada sem await, ou depois da validação" (a chamada resolve mesmo
+  // assim, porque a rejeição solta não impede o resto de rodar).
+  it('checa a sessão antes de validar — e o await protege isso de verdade', async () => {
+    vi.mocked(exigirSessao).mockRejectedValueOnce(new Error('NEXT_REDIRECT'))
 
-    await conferirCods([1, 2, 3])
+    await expect(conferirCods('nem é array')).rejects.toThrow('NEXT_REDIRECT')
 
-    expect(vi.mocked(exigirSessao)).toHaveBeenCalled()
+    expect(vi.mocked(codsJaImportados)).not.toHaveBeenCalled()
   })
 
   it('recusa entrada inválida sem consultar o banco', async () => {
@@ -67,16 +75,24 @@ describe('conferirCods', () => {
 
     expect(resultado).toEqual({ ok: true, jaImportados: [1, 2] })
   })
+
+  it('devolve erro genérico em português quando o banco falha, sem propagar a exceção', async () => {
+    vi.mocked(codsJaImportados).mockRejectedValueOnce(new Error('Neon caiu'))
+
+    const resultado = await conferirCods([1, 2, 3])
+
+    expect(resultado).toEqual({ ok: false, erro: 'Não foi possível conferir os CÓDs. Tente de novo.' })
+  })
 })
 
 describe('gravarLoteAction', () => {
-  it('exige sessão antes de qualquer coisa', async () => {
-    vi.mocked(resolverCadastros).mockResolvedValueOnce({ pessoas: new Map(), categorias: new Map() })
-    vi.mocked(gravarLote).mockResolvedValueOnce(1)
+  it('checa a sessão antes de validar — e o await protege isso de verdade', async () => {
+    vi.mocked(exigirSessao).mockRejectedValueOnce(new Error('NEXT_REDIRECT'))
 
-    await gravarLoteAction([lancamentoValido()])
+    await expect(gravarLoteAction('nem é array')).rejects.toThrow('NEXT_REDIRECT')
 
-    expect(vi.mocked(exigirSessao)).toHaveBeenCalled()
+    expect(vi.mocked(resolverCadastros)).not.toHaveBeenCalled()
+    expect(vi.mocked(gravarLote)).not.toHaveBeenCalled()
   })
 
   it('recusa lote inválido sem gravar', async () => {
@@ -104,15 +120,36 @@ describe('gravarLoteAction', () => {
     expect(resultado).toEqual({ ok: false, erro: 'Não foi possível gravar este lote. Tente de novo.' })
     expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled()
   })
+
+  it('no log, nunca a segunda linha da mensagem nem o objeto do erro inteiro', async () => {
+    // Formato real de um DrizzleQueryError contra PGlite (verificado à mão nesta rodada de
+    // correção): 1ª linha é a consulta parametrizada ($1, $2...), sem dado nenhum; a 2ª
+    // linha ("params: ...") tem os valores literais — aqui, um item de lançamento de
+    // verdade, o tipo de coisa que a spec §12 proíbe no log.
+    const erroDoBanco = new Error(
+      'Failed query: insert into "lancamentos" (...) values ($1, $2)\nparams: 2026-09-01,Remedio de uso continuo',
+    )
+    vi.mocked(resolverCadastros).mockRejectedValueOnce(erroDoBanco)
+    const espiao = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    await gravarLoteAction([lancamentoValido()])
+
+    expect(espiao).toHaveBeenCalledWith(
+      'Falha ao gravar lote da importação',
+      'Failed query: insert into "lancamentos" (...) values ($1, $2)',
+    )
+    expect(JSON.stringify(espiao.mock.calls)).not.toContain('Remedio de uso continuo')
+    espiao.mockRestore()
+  })
 })
 
 describe('desfazerAction', () => {
-  it('exige sessão antes de qualquer coisa', async () => {
-    vi.mocked(desfazerImportacao).mockResolvedValueOnce(4805)
+  it('checa a sessão antes de apagar — e o await protege isso de verdade', async () => {
+    vi.mocked(exigirSessao).mockRejectedValueOnce(new Error('NEXT_REDIRECT'))
 
-    await desfazerAction()
+    await expect(desfazerAction()).rejects.toThrow('NEXT_REDIRECT')
 
-    expect(vi.mocked(exigirSessao)).toHaveBeenCalled()
+    expect(vi.mocked(desfazerImportacao)).not.toHaveBeenCalled()
   })
 
   it('apaga e revalida /lancamentos', async () => {

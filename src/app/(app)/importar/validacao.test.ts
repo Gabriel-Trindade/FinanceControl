@@ -64,6 +64,18 @@ describe('loteSchema', () => {
     }
   })
 
+  it('recusa codPlanilha acima do limite do integer do Postgres', () => {
+    const resultado = loteSchema.safeParse([lancamentoValido({ codPlanilha: 2_147_483_648 })])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      expect(resultado.error.issues[0].message).toBe('CÓD acima do limite do banco (máximo 2.147.483.647)')
+    }
+  })
+
+  it('aceita codPlanilha exatamente no limite do integer do Postgres', () => {
+    expect(loteSchema.safeParse([lancamentoValido({ codPlanilha: 2_147_483_647 })]).success).toBe(true)
+  })
+
   it('recusa mesFatura fora do dia 1', () => {
     const resultado = loteSchema.safeParse([lancamentoValido({ mesFatura: '2026-09-05' })])
     expect(resultado.success).toBe(false)
@@ -74,6 +86,24 @@ describe('loteSchema', () => {
 
   it('recusa mesFatura em formato totalmente diferente', () => {
     expect(loteSchema.safeParse([lancamentoValido({ mesFatura: '01/09/2026' })]).success).toBe(false)
+  })
+
+  it('recusa mesFatura com mês que não existe (13)', () => {
+    // A coluna é `date`: "2026-13-01" passa por um regex que só confere o dia (^\d{4}-\d{2}-01$)
+    // e só estoura no banco ("date/time field value out of range"), derrubando o lote inteiro.
+    const resultado = loteSchema.safeParse([lancamentoValido({ mesFatura: '2026-13-01' })])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      expect(resultado.error.issues[0].message).toBe('Mês da fatura deve estar no formato AAAA-MM-01')
+    }
+  })
+
+  it('recusa mesFatura com mês 00', () => {
+    expect(loteSchema.safeParse([lancamentoValido({ mesFatura: '2026-00-01' })]).success).toBe(false)
+  })
+
+  it('aceita mesFatura em dezembro (fronteira alta do mês)', () => {
+    expect(loteSchema.safeParse([lancamentoValido({ mesFatura: '2026-12-01' })]).success).toBe(true)
   })
 
   it('recusa valorCentavos acima do limite do integer do Postgres', () => {
@@ -146,6 +176,14 @@ describe('loteSchema', () => {
     expect(resultado.success).toBe(false)
   })
 
+  it('recusa qtdParcelas abaixo de 1, com a mensagem do piso (não a do refine)', () => {
+    const resultado = loteSchema.safeParse([lancamentoValido({ qtdParcelas: 0 })])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      expect(resultado.error.issues[0].message).toBe('Quantidade de parcelas deve ser no mínimo 1')
+    }
+  })
+
   it('recusa pagamento fora do enum', () => {
     const resultado = loteSchema.safeParse([lancamentoValido({ pagamento: 'TALVEZ' as unknown as 'NAO' })])
     expect(resultado.success).toBe(false)
@@ -158,6 +196,42 @@ describe('loteSchema', () => {
     const resultado = loteSchema.safeParse([lancamentoValido({ pessoa: '   ' })])
     expect(resultado.success).toBe(false)
     if (!resultado.success) expect(resultado.error.issues[0].message).toBe('Informe a pessoa')
+  })
+
+  it('recusa pessoa acima de 200 caracteres (índice único não engole qualquer tamanho)', () => {
+    const resultado = loteSchema.safeParse([lancamentoValido({ pessoa: 'a'.repeat(201) })])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      expect(resultado.error.issues[0].message).toBe('Pessoa acima do limite de 200 caracteres')
+    }
+  })
+
+  it('recusa categoria acima de 200 caracteres', () => {
+    const resultado = loteSchema.safeParse([lancamentoValido({ categoria: 'a'.repeat(201) })])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      expect(resultado.error.issues[0].message).toBe('Categoria acima do limite de 200 caracteres')
+    }
+  })
+
+  it('recusa lote que não é uma lista, com mensagem em português (não a padrão do zod)', () => {
+    const resultado = loteSchema.safeParse(undefined)
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      const mensagem = resultado.error.issues[0].message
+      expect(mensagem).toBe('Lote deve ser uma lista de lançamentos')
+      expect(mensagem.toLowerCase()).not.toContain('expected')
+    }
+  })
+
+  it('recusa elemento que não é um objeto, com mensagem em português (não a padrão do zod)', () => {
+    const resultado = loteSchema.safeParse([null])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      const mensagem = resultado.error.issues[0].message
+      expect(mensagem).toBe('Lançamento deve ser um objeto')
+      expect(mensagem.toLowerCase()).not.toContain('expected')
+    }
   })
 })
 
@@ -188,5 +262,27 @@ describe('codsSchema', () => {
     const resultado = codsSchema.safeParse([0])
     expect(resultado.success).toBe(false)
     if (!resultado.success) expect(resultado.error.issues[0].message).toBe('CÓD deve ser no mínimo 1')
+  })
+
+  it('recusa item acima do limite do integer do Postgres', () => {
+    const resultado = codsSchema.safeParse([2_147_483_648])
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      expect(resultado.error.issues[0].message).toBe('CÓD acima do limite do banco (máximo 2.147.483.647)')
+    }
+  })
+
+  it('aceita item exatamente no limite do integer do Postgres', () => {
+    expect(codsSchema.safeParse([2_147_483_647]).success).toBe(true)
+  })
+
+  it('recusa entrada que não é uma lista, com mensagem em português (não a padrão do zod)', () => {
+    const resultado = codsSchema.safeParse(undefined)
+    expect(resultado.success).toBe(false)
+    if (!resultado.success) {
+      const mensagem = resultado.error.issues[0].message
+      expect(mensagem).toBe('CÓDs devem ser uma lista de números')
+      expect(mensagem.toLowerCase()).not.toContain('expected')
+    }
   })
 })

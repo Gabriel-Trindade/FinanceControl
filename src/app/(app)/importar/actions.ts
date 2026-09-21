@@ -7,6 +7,18 @@ import { codsJaImportados, desfazerImportacao, gravarLote, resolverCadastros } f
 import { codsSchema, loteSchema } from './validacao'
 
 /**
+ * DrizzleQueryError junta a consulta parametrizada ($1, $2...) e os valores literais no
+ * mesmo `.message`, em linhas separadas, e também guarda os valores soltos em `.params`
+ * (`Object.keys` confirma, contra PGlite: `['query', 'params', 'cause']`). `console.error`
+ * com o erro inteiro imprime os dois — spec §12 pede sem dado real no log, e um lote de
+ * até 500 lançamentos ali é a vida financeira inteira do dono, não só um id. Por isso só a
+ * primeira linha da mensagem (a query, sem valores) vai para o log.
+ */
+function resumoDoErro(erro: unknown): string | unknown {
+  return erro instanceof Error ? erro.message.split('\n')[0] : erro
+}
+
+/**
  * Quais desses CÓD já existem no banco — a etapa "conferir" da spec §6.5, antes de
  * qualquer gravação. Mesmo só lendo, chama exigirSessao(): a lista de CÓDs importados
  * não é pública, e esta action é um POST que qualquer um pode chamar direto.
@@ -19,8 +31,16 @@ export async function conferirCods(
   const validado = codsSchema.safeParse(cods)
   if (!validado.success) return { ok: false, erro: validado.error.issues[0].message }
 
-  const existentes = await codsJaImportados(obterDb(), validado.data)
-  return { ok: true, jaImportados: [...existentes] }
+  try {
+    const existentes = await codsJaImportados(obterDb(), validado.data)
+    return { ok: true, jaImportados: [...existentes] }
+  } catch (erro) {
+    // Sem isto, uma queda do Neon na etapa "conferir" (spec §6.5, antes de gravar
+    // qualquer coisa) vira exceção não tratada — e as três actions prometem o mesmo
+    // formato { ok }, para a Tarefa 11 tratar falha de um jeito só (brief da Tarefa 10).
+    console.error('Falha ao conferir CÓDs da importação', resumoDoErro(erro))
+    return { ok: false, erro: 'Não foi possível conferir os CÓDs. Tente de novo.' }
+  }
 }
 
 /**
@@ -52,7 +72,7 @@ export async function gravarLoteAction(
     // fica pela metade. Sem este try/catch, a exceção vira erro não tratado de Server
     // Action e a tela perde a leitura inteira do arquivo — o dono teria que reescolher
     // o .xlsx. Com ele, a tela consegue oferecer "tentar de novo" a partir daqui.
-    console.error('Falha ao gravar lote da importação', erro)
+    console.error('Falha ao gravar lote da importação', resumoDoErro(erro))
     return { ok: false, erro: 'Não foi possível gravar este lote. Tente de novo.' }
   }
 }
@@ -68,7 +88,7 @@ export async function desfazerAction(): Promise<
     revalidatePath('/lancamentos')
     return { ok: true, apagados }
   } catch (erro) {
-    console.error('Falha ao desfazer a importação', erro)
+    console.error('Falha ao desfazer a importação', resumoDoErro(erro))
     return { ok: false, erro: 'Não foi possível desfazer a importação.' }
   }
 }
