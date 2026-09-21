@@ -5,10 +5,6 @@ import { obterOuCriarCategoria, obterOuCriarPessoa } from './cadastros'
 import { lancamentos } from './schema'
 import type { Db } from './tipos'
 
-// Reexportado por conveniência de quem já importa deste módulo (Tarefa 10). A tela de
-// importação (cliente) importa direto de @/importacao/lotes — ver a nota lá.
-export { TAMANHO_DO_LOTE } from '@/importacao/lotes'
-
 /**
  * Chave do mapa nome → id, igual nos dois lados (resolverCadastros monta, gravarLote
  * consulta). O banco compara pessoa/categoria por lower(nome) (pessoas_nome_unico), então

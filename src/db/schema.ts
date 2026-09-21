@@ -48,7 +48,8 @@ export const categorias = pgTable(
 export const lancamentos = pgTable(
   'lancamentos',
   {
-    // "by default" deixa a migração da planilha gravar os CÓDs antigos (1–4805).
+    // Identidade só do banco: sempre gerada pela sequência, em qualquer INSERT — nunca guarda
+    // nem se relaciona com o CÓD da planilha (esse é cod_planilha, a coluna logo abaixo).
     id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
     mesFatura: date('mes_fatura', { mode: 'string' }).notNull(),
     dataCompra: date('data_compra', { mode: 'string' }),
