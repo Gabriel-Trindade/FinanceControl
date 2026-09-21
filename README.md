@@ -91,7 +91,7 @@ Se houver problemas, a lista mostra o número da linha e por que não vai entrar
 
 ### Desfazer uma importação
 
-Em qualquer tela de importação, há um botão "Desfazer importação" (escondido por padrão, em baixo). Clique nele para expandir:
+Na tela inicial e no relatório final há um botão "Desfazer importação", recolhido por padrão, no rodapé. Clique nele para expandir:
 
 1. Digite `APAGAR` em maiúsculas para liberar o botão
 2. Clique "Apagar os lançamentos importados"
