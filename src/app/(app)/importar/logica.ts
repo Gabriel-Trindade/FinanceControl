@@ -34,6 +34,12 @@ export type Fase =
     }
   | { tipo: 'relatorio'; resultado: ResultadoDaTraducao; jaImportados: Set<number>; gravados: number }
 
+/** Nomes para os dois membros de `Fase` que `assistente.tsx` e `logica.ts` passam adiante como
+ *  parâmetro/retorno (`gravarEmSequencia`, `proximoEstadoAoRetomar`...) — só para não escrever
+ *  `Extract<Fase, { tipo: '...' }>` toda vez. */
+export type FaseGravando = Extract<Fase, { tipo: 'gravando' }>
+export type FaseErroGravacao = Extract<Fase, { tipo: 'erro-gravacao' }>
+
 /** Estado do painel de "desfazer importação" — independente da fase principal, porque o
  *  painel aparece tanto na etapa 1 (escolher) quanto na etapa 4 (relatório). */
 export type EstadoDesfazer =
@@ -259,4 +265,33 @@ export async function lerEProcessarArquivo(
     return { ok: false, erro: mensagem }
   }
   return { ok: true, resultado: deps.traduzirPlanilha(linhas) }
+}
+
+// ===== Rodada de correção 2: a decisão de "retomar", fora da fiação React =====
+//
+// O Crítico da Rodada 1 (retomar não podia zerar `gravados`) foi corrigido em assistente.tsx,
+// mas nada testava ESSA função — só gravarEmSequencia, chamada direto com jaGravados=2000 à
+// mão, o que prova a soma e não prova que `retomar` monta o próximo estado certo. A re-revisão
+// confirmou rodando a mutação: devolver o `gravados: 0` para dentro de `retomar` (em
+// assistente.tsx) não derruba teste nenhum. A correção é a mesma receita das outras duas: tirar
+// a DECISÃO da função React (que só chamaria `setFase`) e testar a decisão isolada.
+
+/**
+ * O próximo estado depois de "retomar" uma gravação que falhou: sempre do lote 1 (idempotente —
+ * os lotes que já entraram são reenviados e não fazem nada de novo), com `gravados` PRESERVADO
+ * (é o total confirmado antes da falha; gravarLoteAction só soma o que cada lote de fato insere,
+ * então zerar aqui faria o relatório final esquecer tudo que tinha entrado). O `erro` não entra
+ * no retorno — não é um `{ ...estadoComErro, ... }`, é um objeto novo só com os 6 campos que
+ * `FaseGravando` declara, então não sobra um `erro` pendurado num estado que não o tem (achado
+ * "Menor" da Rodada 1: um spread anterior carregava esse campo sem o tipo declarar).
+ */
+export function proximoEstadoAoRetomar(estadoComErro: FaseErroGravacao): FaseGravando {
+  return {
+    tipo: 'gravando',
+    resultado: estadoComErro.resultado,
+    jaImportados: estadoComErro.jaImportados,
+    lotes: estadoComErro.lotes,
+    loteAtual: 0,
+    gravados: estadoComErro.gravados,
+  }
 }

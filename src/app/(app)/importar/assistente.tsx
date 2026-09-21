@@ -23,9 +23,12 @@ import {
   fatiar,
   gravarEmSequencia,
   lerEProcessarArquivo,
+  proximoEstadoAoRetomar,
   separarNovos,
   type EstadoDesfazer,
   type Fase,
+  type FaseErroGravacao,
+  type FaseGravando,
 } from './logica'
 
 const TITULOS: Record<Fase['tipo'], string> = {
@@ -96,7 +99,7 @@ export function Assistente() {
     await conferir(processado.resultado)
   }
 
-  async function gravarLotes(inicial: Extract<Fase, { tipo: 'gravando' }>) {
+  async function gravarLotes(inicial: FaseGravando) {
     const resultado = await gravarEmSequencia(
       inicial.lotes,
       inicial.loteAtual,
@@ -123,7 +126,7 @@ export function Assistente() {
     // CONFLICT DO NOTHING), mas o número no botão ("Gravar N lançamentos") deixaria de bater
     // com o que de fato é gravado.
     const lotes = fatiar(separarNovos(resultado.lancamentos, jaImportados), TAMANHO_DO_LOTE)
-    const proxima: Extract<Fase, { tipo: 'gravando' }> = {
+    const proxima: FaseGravando = {
       tipo: 'gravando',
       resultado,
       jaImportados,
@@ -135,16 +138,13 @@ export function Assistente() {
     void gravarLotes(proxima)
   }
 
-  function retomar(estadoComErro: Extract<Fase, { tipo: 'erro-gravacao' }>) {
-    // Sempre do lote 1, nunca do que falhou (brief) — seguro porque gravarLoteAction é
-    // idempotente: os lotes que já entraram são reenviados e não fazem nada na 2ª vez.
-    //
-    // NÃO zera `gravados`: gravarLote devolve só as linhas que de fato entraram (.returning()
-    // sobre ON CONFLICT DO NOTHING — src/db/importacao.test.ts:218-238 fixa isso), então os
-    // lotes já gravados na 1ª tentativa devolvem 0 ao ser reenviados. gravarEmSequencia soma
-    // esse 0 sobre `jaGravados` (aqui, o total já confirmado antes da falha) — zerar aqui
-    // faria o relatório final "esquecer" tudo que tinha entrado antes do lote que falhou.
-    const proxima: Extract<Fase, { tipo: 'gravando' }> = { ...estadoComErro, tipo: 'gravando', loteAtual: 0 }
+  function retomar(estadoComErro: FaseErroGravacao) {
+    // A decisão (sempre do lote 1, gravados PRESERVADO, sem o campo erro sobrando) mora em
+    // proximoEstadoAoRetomar (logica.ts) — é lá que o teste garante que "gravados: 0" não
+    // volta a se esconder aqui sem que nada acuse (Crítico da Rodada 1, sem teste até a
+    // Rodada 2: gravarEmSequencia prova que a SOMA está certa, não que retomar chama ela com
+    // o valor certo).
+    const proxima = proximoEstadoAoRetomar(estadoComErro)
     setFase(proxima)
     void gravarLotes(proxima)
   }

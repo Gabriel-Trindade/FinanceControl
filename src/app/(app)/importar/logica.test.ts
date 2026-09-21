@@ -10,7 +10,9 @@ import {
   gravarEmSequencia,
   lerEProcessarArquivo,
   montarResumo,
+  proximoEstadoAoRetomar,
   separarNovos,
+  type FaseErroGravacao,
   type RespostaDaConferencia,
   type RespostaDoLote,
 } from './logica'
@@ -356,5 +358,57 @@ describe('aguardarPintura', () => {
     expect(resolvida).toBe(true)
 
     vi.unstubAllGlobals()
+  })
+})
+
+// ===== Rodada de correção 2: a decisão de "retomar" =====
+
+describe('proximoEstadoAoRetomar', () => {
+  function estadoComErro(mudancas: Partial<FaseErroGravacao> = {}): FaseErroGravacao {
+    return {
+      tipo: 'erro-gravacao',
+      resultado: { lancamentos: [], problemas: [], avisos: [] },
+      jaImportados: new Set(),
+      lotes: [[lancamento({ codPlanilha: 1 })], [lancamento({ codPlanilha: 2 })]],
+      loteAtual: 4,
+      gravados: 2000,
+      erro: 'Não foi possível gravar este lote. Tente de novo.',
+      ...mudancas,
+    }
+  }
+
+  it('preserva `gravados` — é o total confirmado antes da falha, não pode voltar a zerar', () => {
+    // Este é o teste que faltava na Rodada 1: gravarEmSequencia (testada acima) prova que a
+    // SOMA está certa quando jaGravados chega certo; este prova que quem monta o próximo
+    // estado de "retomar" PASSA o valor certo. Sem ele, devolver `gravados: 0` para dentro de
+    // retomar (assistente.tsx) — o bug crítico original — não derruba teste nenhum, como a
+    // re-revisão confirmou rodando essa mutação de verdade.
+    const proxima = proximoEstadoAoRetomar(estadoComErro({ gravados: 2000 }))
+
+    expect(proxima.gravados).toBe(2000)
+  })
+
+  it('zera loteAtual (refaz do lote 1) e não deixa "erro" pendurado no novo estado', () => {
+    const proxima = proximoEstadoAoRetomar(estadoComErro({ loteAtual: 4 }))
+
+    expect(proxima.tipo).toBe('gravando')
+    expect(proxima.loteAtual).toBe(0)
+    // Não é `{ ...estadoComErro, tipo: 'gravando' }`: um spread levaria o campo `erro` junto
+    // (FaseGravando não o declara, mas o objeto em tempo de execução teria o campo do mesmo
+    // jeito — achado "Menor" da Rodada 1). O objeto novo, com só os 6 campos que FaseGravando
+    // declara, não tem essa sobra.
+    expect('erro' in proxima).toBe(false)
+  })
+
+  it('mantém resultado, jaImportados e lotes intactos — só loteAtual e o "tipo" mudam', () => {
+    const resultado: ResultadoDaTraducao = { lancamentos: [lancamento()], problemas: [], avisos: [] }
+    const jaImportados = new Set([1, 2])
+    const lotes = [[lancamento({ codPlanilha: 9 })]]
+
+    const proxima = proximoEstadoAoRetomar(estadoComErro({ resultado, jaImportados, lotes }))
+
+    expect(proxima.resultado).toBe(resultado)
+    expect(proxima.jaImportados).toBe(jaImportados)
+    expect(proxima.lotes).toBe(lotes)
   })
 })
