@@ -1478,6 +1478,8 @@ Spec §6.5, §9.1 e §10. Quatro etapas com progresso explícito.
 
 Fluxo: escolher arquivo → `lerPlanilha` → `traduzirPlanilha` → `conferirCods` → mostrar contagem → ao confirmar, fatiar em lotes de `TAMANHO_DO_LOTE` e chamar `gravarLoteAction` em sequência, atualizando o progresso → relatório.
 
+**`conferirCods` também precisa ser fatiada.** O `codsSchema` tem `.max(TAMANHO_DO_LOTE)`, então os 4.805 `CÓD` não cabem numa chamada só: são cerca de dez, e os resultados se juntam num `Set` antes de montar a contagem. Isso não estava escrito em lugar nenhum e foi levantado na revisão da Tarefa 10.
+
 Regras da tela:
 
 - **Nada é gravado antes da confirmação.** O botão da etapa 2 diz o que vai acontecer, com o número: "Gravar 4.802 lançamentos".
