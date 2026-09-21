@@ -259,9 +259,15 @@ describe('gravarEmSequencia', () => {
 
 describe('lerEProcessarArquivo', () => {
   it('espera a pintura ANTES de ler o arquivo — nunca depois (mutação: remover o await)', async () => {
+    // O `await Promise.resolve()` dentro do dublê de aguardarPintura não é enfeite: sem uma
+    // pausa assíncrona de verdade aqui, uma função async sem `await` interno roda até o fim
+    // de forma SÍNCRONA ao ser chamada, e "esqueceram o await" no chamador não mudaria a
+    // ordem observada — a 1ª versão deste teste passava mesmo com a mutação aplicada por
+    // esse motivo exato (confirmado rodando a mutação de verdade).
     const ordem: string[] = []
     const deps = {
       aguardarPintura: async () => {
+        await Promise.resolve()
         ordem.push('pintura')
       },
       lerPlanilha: async () => {
