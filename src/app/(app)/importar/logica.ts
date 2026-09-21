@@ -1,4 +1,6 @@
-import type { LancamentoDaPlanilha, ResultadoDaTraducao } from '@/domain/planilha'
+import { ErroDeLeitura } from '@/importacao/ler-xlsx'
+import { TAMANHO_DO_LOTE } from '@/importacao/lotes'
+import type { Celula, LancamentoDaPlanilha, ResultadoDaTraducao } from '@/domain/planilha'
 
 /**
  * Tudo o que o assistente de importação pode estar fazendo, num tipo só — o componente
@@ -116,4 +118,145 @@ export function montarResumo(
     jaImportadas: jaImportadasCount,
     comProblema: resultado.problemas.length,
   }
+}
+
+// ===== Rodada de correção 1: os dois laços e o "esperar pintar", extraídos e testáveis =====
+//
+// assistente.tsx tinha 242 linhas e zero teste — três mutações sobreviviam (revisão da
+// Tarefa 11): trocar `return` por `continue` depois de um lote falhar, `break` depois do 1º
+// grupo de CÓDs, e remover o `await aguardarPintura()`. As três dependiam de efeito colateral
+// (Server Action, DOM) só alcançável rodando o componente React de verdade — o que o projeto
+// não tem como fazer sem uma dependência nova. A saída: cada laço vira uma função pura que
+// recebe a chamada de rede (`chamar`) por parâmetro. Em produção, `chamar` é a Server Action de
+// verdade; no teste, é um dublê — e as asserções sobre QUANTAS VEZES `chamar` foi chamado (e
+// com o quê) são exatamente o que prova que o laço para na hora certa.
+
+/** Garante que um estado "carregando" CHEGOU a pintar antes de um trabalho síncrono pesado
+ *  travar a thread principal (lerPlanilha: ~119ms medidos com 4.806 linhas em desktop, sem Web
+ *  Worker). Um requestAnimationFrame roda ANTES do navegador pintar; o segundo, agendado de
+ *  DENTRO do primeiro, só roda no quadro seguinte — quando a pintura do primeiro já aconteceu.
+ *  Um `await` de frame só não bastaria sempre: é a técnica padrão ("double rAF") para ter
+ *  certeza de que o navegador pintou, não só que agendou a pintura. */
+export function aguardarPintura(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
+
+export type RespostaDaConferencia = { ok: true; jaImportados: number[] } | { ok: false; erro: string }
+
+export type ResultadoDaConferenciaEmGrupos =
+  | { ok: true; jaImportados: Set<number> }
+  | { ok: false; erro: string; excecao?: unknown }
+
+/**
+ * Confere todos os CÓDs, fatiados em grupos de TAMANHO_DO_LOTE (o codsSchema de
+ * src/app/(app)/importar/validacao.ts recusa mais que isso numa chamada só). Para no primeiro
+ * grupo que falhar — nunca segue conferindo os outros com um resultado incompleto, porque o
+ * dono leria "0 já importadas" quando na verdade a conferência nem terminou.
+ *
+ * `chamar` fica de fora (não é a Server Action direto) para o teste poder passar um dublê sem
+ * precisar de sessão nem de banco — só esta função e a ORDEM/QUANTIDADE de chamadas a `chamar`
+ * são o que se testa aqui.
+ */
+export async function conferirEmGrupos(
+  cods: readonly number[],
+  chamar: (grupo: number[]) => Promise<RespostaDaConferencia>,
+): Promise<ResultadoDaConferenciaEmGrupos> {
+  const grupos = fatiar(cods, TAMANHO_DO_LOTE)
+  const jaImportados = new Set<number>()
+  for (const grupo of grupos) {
+    let resposta: RespostaDaConferencia
+    try {
+      resposta = await chamar(grupo)
+    } catch (excecao) {
+      // exigirSessao() (1ª linha de conferirCods) redireciona para /login lançando um erro
+      // especial do Next quando a sessão expira no meio da importação. Não é papel desta
+      // função pura reconhecer esse erro (unstable_rethrow só existe em Client Component) —
+      // ela só devolve a exceção crua para quem chamou decidir, junto com uma mensagem
+      // genérica para o caso de ser um erro comum (rede caiu, deploy novo no ar).
+      return { ok: false, erro: 'Não foi possível conferir os CÓDs. Tente de novo.', excecao }
+    }
+    if (!resposta.ok) return { ok: false, erro: resposta.erro }
+    for (const cod of resposta.jaImportados) jaImportados.add(cod)
+  }
+  return { ok: true, jaImportados }
+}
+
+export type RespostaDoLote = { ok: true; gravados: number } | { ok: false; erro: string }
+
+export type ResultadoDaGravacaoEmSequencia =
+  | { ok: true; gravados: number }
+  | { ok: false; loteAtual: number; gravados: number; erro: string; excecao?: unknown }
+
+/**
+ * Grava os lotes a partir do índice `inicio` (0 para começar do zero; o índice do lote que
+ * falhou, nunca usado por "retomar" — ver `assistente.tsx` — mas útil para o teste exercitar
+ * um recomeço no meio). Para no primeiro lote que falhar — nunca continua para o próximo
+ * depois de uma falha (brief da Tarefa 11). `jaGravados` entra na soma: quem chama pode ter um
+ * total anterior (uma retomada, por exemplo) que não pode ser jogado fora.
+ *
+ * `aoProgredir` é chamado depois de CADA lote bem-sucedido, com o total atualizado — é o gancho
+ * para assistente.tsx atualizar a tela lote a lote, sem esta função saber o que é React.
+ */
+export async function gravarEmSequencia(
+  lotes: readonly LancamentoDaPlanilha[][],
+  inicio: number,
+  jaGravados: number,
+  chamar: (lote: LancamentoDaPlanilha[]) => Promise<RespostaDoLote>,
+  aoProgredir: (loteAtual: number, gravados: number) => void,
+): Promise<ResultadoDaGravacaoEmSequencia> {
+  let gravadosTotal = jaGravados
+  for (let indice = inicio; indice < lotes.length; indice++) {
+    let resposta: RespostaDoLote
+    try {
+      resposta = await chamar(lotes[indice])
+    } catch (excecao) {
+      return {
+        ok: false,
+        loteAtual: indice,
+        gravados: gravadosTotal,
+        erro: 'Não foi possível gravar este lote. Tente de novo.',
+        excecao,
+      }
+    }
+    if (!resposta.ok) {
+      // Para AQUI — nunca segue para o próximo lote depois de uma falha (brief).
+      return { ok: false, loteAtual: indice, gravados: gravadosTotal, erro: resposta.erro }
+    }
+    gravadosTotal += resposta.gravados
+    aoProgredir(indice + 1, gravadosTotal)
+  }
+  return { ok: true, gravados: gravadosTotal }
+}
+
+export type ResultadoDaLeitura =
+  | { ok: true; resultado: ResultadoDaTraducao }
+  | { ok: false; erro: string }
+
+/**
+ * A etapa "lendo o arquivo": espera pintar, lê, traduz. As três dependências (`aguardarPintura`,
+ * `lerPlanilha`, `traduzirPlanilha`) entram por parâmetro só para o teste poder trocar a
+ * primeira por um dublê instrumentado e provar a ORDEM (pintura antes da leitura) sem precisar
+ * de `requestAnimationFrame` de verdade nem de um `.xlsx`.
+ */
+export async function lerEProcessarArquivo(
+  arquivo: File,
+  deps: {
+    aguardarPintura: () => Promise<void>
+    lerPlanilha: (arquivo: File) => Promise<Celula[][]>
+    traduzirPlanilha: (linhas: Celula[][]) => ResultadoDaTraducao
+  },
+): Promise<ResultadoDaLeitura> {
+  await deps.aguardarPintura()
+  let linhas: Celula[][]
+  try {
+    linhas = await deps.lerPlanilha(arquivo)
+  } catch (erro) {
+    // lerPlanilha roda inteiramente no navegador (sem Server Action envolvida), então
+    // qualquer erro aqui é sobre o ARQUIVO, nunca sobre sessão.
+    const mensagem = erro instanceof ErroDeLeitura ? erro.message : 'Não foi possível ler o arquivo.'
+    return { ok: false, erro: mensagem }
+  }
+  return { ok: true, resultado: deps.traduzirPlanilha(linhas) }
 }

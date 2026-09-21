@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { unstable_rethrow } from 'next/navigation'
-import { ErroDeLeitura, lerPlanilha } from '@/importacao/ler-xlsx'
+import { lerPlanilha } from '@/importacao/ler-xlsx'
 import { TAMANHO_DO_LOTE } from '@/importacao/lotes'
-import { traduzirPlanilha, type Celula, type ResultadoDaTraducao } from '@/domain/planilha'
+import { traduzirPlanilha, type ResultadoDaTraducao } from '@/domain/planilha'
 import { conferirCods, desfazerAction, gravarLoteAction } from './actions'
 import {
   Estepe,
@@ -16,7 +16,17 @@ import {
   TelaRelatorio,
   TelaRevisao,
 } from './componentes'
-import { etapaDaFase, fatiar, separarNovos, type EstadoDesfazer, type Fase } from './logica'
+import {
+  aguardarPintura,
+  conferirEmGrupos,
+  etapaDaFase,
+  fatiar,
+  gravarEmSequencia,
+  lerEProcessarArquivo,
+  separarNovos,
+  type EstadoDesfazer,
+  type Fase,
+} from './logica'
 
 const TITULOS: Record<Fase['tipo'], string> = {
   escolher: 'Escolher arquivo',
@@ -27,20 +37,6 @@ const TITULOS: Record<Fase['tipo'], string> = {
   gravando: 'Gravando',
   'erro-gravacao': 'Não foi possível gravar um lote',
   relatorio: 'Relatório',
-}
-
-/**
- * Garante que "Lendo o arquivo…" CHEGOU a pintar antes de lerPlanilha travar a thread
- * principal (~119ms medidos com 4.806 linhas em desktop, sem Web Worker — item 2 das
- * observações da Tarefa 11). Um requestAnimationFrame roda ANTES do navegador pintar; o
- * segundo, agendado de DENTRO do primeiro, só roda no quadro seguinte — quando a pintura do
- * primeiro já aconteceu. Um `await` de frame só não bastaria sempre: é a técnica padrão
- * ("double rAF") para ter certeza de que o navegador pintou, não só que agendou a pintura.
- */
-function aguardarPintura(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  })
 }
 
 export function Assistente() {
@@ -64,31 +60,18 @@ export function Assistente() {
   async function conferir(resultado: ResultadoDaTraducao) {
     // Sequencial de propósito: o codsSchema aceita no máximo TAMANHO_DO_LOTE (500) CÓDs por
     // chamada, e os 4.805 da planilha real não cabem numa só (revisão da Tarefa 10). Também
-    // não valeria paralelizar com Promise.all — o Next despacha Server Actions uma de cada
-    // vez por cliente (node_modules/next/dist/docs/01-app/02-guides/server-actions.md,
-    // "Sequential dispatch on the client"), então as chamadas seriam serializadas de
-    // qualquer forma, só que sem controle de qual falhou.
-    const grupos = fatiar(resultado.lancamentos.map((l) => l.codPlanilha), TAMANHO_DO_LOTE)
-    const jaImportados = new Set<number>()
-    for (const grupo of grupos) {
-      try {
-        const resposta = await conferirCods(grupo)
-        if (!resposta.ok) {
-          setFase({ tipo: 'erro-conferencia', resultado, erro: resposta.erro })
-          return
-        }
-        for (const cod of resposta.jaImportados) jaImportados.add(cod)
-      } catch (erro) {
-        // exigirSessao() (1ª linha de conferirCods) redireciona para /login lançando um erro
-        // especial do Next quando a sessão expira no meio da importação; unstable_rethrow
-        // deixa ESSE erro atravessar para o Next terminar a navegação, e só vira "erro de
-        // conferência" aqui qualquer outra coisa (rede caiu, deploy novo no ar).
-        unstable_rethrow(erro)
-        setFase({ tipo: 'erro-conferencia', resultado, erro: 'Não foi possível conferir os CÓDs. Tente de novo.' })
-        return
-      }
+    // não valeria paralelizar com Promise.all — o Next despacha Server Actions uma de cada vez
+    // por cliente (node_modules/next/dist/docs/01-app/02-guides/server-actions.md, "Sequential
+    // dispatch on the client") — conferirEmGrupos (logica.ts) já faz isso sequencialmente.
+    const resposta = await conferirEmGrupos(resultado.lancamentos.map((l) => l.codPlanilha), conferirCods)
+    if (!resposta.ok) {
+      // unstable_rethrow deixa o erro especial de sessão expirada (next/navigation) atravessar
+      // para o Next terminar o redirect; qualquer outro erro (rede caiu) só vira a tela de erro.
+      unstable_rethrow(resposta.excecao)
+      setFase({ tipo: 'erro-conferencia', resultado, erro: resposta.erro })
+      return
     }
-    setFase({ tipo: 'revisao', resultado, jaImportados })
+    setFase({ tipo: 'revisao', resultado, jaImportados: resposta.jaImportados })
   }
 
   function reconferir(resultado: ResultadoDaTraducao) {
@@ -97,50 +80,42 @@ export function Assistente() {
   }
 
   async function aoEscolherArquivo(arquivo: File) {
+    // Reinicia o painel de desfazer: sem isto, desfazer na etapa 1 e depois escolher um
+    // arquivo novo deixaria "4.802 apagados" (ou um erro velho) preso na tela até o relatório
+    // seguinte, contando uma história que não é mais a de agora.
+    setEstadoDesfazer({ tipo: 'ocioso' })
     setFase({ tipo: 'lendo' })
-    await aguardarPintura()
 
-    let linhas: Celula[][]
-    try {
-      linhas = await lerPlanilha(arquivo)
-    } catch (erro) {
-      // lerPlanilha roda inteiramente no navegador (sem Server Action envolvida), então
-      // qualquer erro aqui é sobre o ARQUIVO, nunca sobre sessão — sem unstable_rethrow.
-      const mensagem = erro instanceof ErroDeLeitura ? erro.message : 'Não foi possível ler o arquivo.'
-      setFase({ tipo: 'escolher', erro: mensagem })
+    const processado = await lerEProcessarArquivo(arquivo, { aguardarPintura, lerPlanilha, traduzirPlanilha })
+    if (!processado.ok) {
+      setFase({ tipo: 'escolher', erro: processado.erro })
       return
     }
 
-    const resultado = traduzirPlanilha(linhas)
-    setFase({ tipo: 'conferindo', resultado })
-    await conferir(resultado)
+    setFase({ tipo: 'conferindo', resultado: processado.resultado })
+    await conferir(processado.resultado)
   }
 
   async function gravarLotes(inicial: Extract<Fase, { tipo: 'gravando' }>) {
-    let gravadosTotal = inicial.gravados
-    for (let indice = inicial.loteAtual; indice < inicial.lotes.length; indice++) {
-      try {
-        const resposta = await gravarLoteAction(inicial.lotes[indice])
-        if (!resposta.ok) {
-          // Para o laço AQUI — nunca segue para o próximo lote depois de uma falha (brief).
-          setFase({ ...inicial, tipo: 'erro-gravacao', loteAtual: indice, gravados: gravadosTotal, erro: resposta.erro })
-          return
-        }
-        gravadosTotal += resposta.gravados
-        setFase({ ...inicial, loteAtual: indice + 1, gravados: gravadosTotal })
-      } catch (erro) {
-        unstable_rethrow(erro)
-        setFase({
-          ...inicial,
-          tipo: 'erro-gravacao',
-          loteAtual: indice,
-          gravados: gravadosTotal,
-          erro: 'Não foi possível gravar este lote. Tente de novo.',
-        })
-        return
-      }
+    const resultado = await gravarEmSequencia(
+      inicial.lotes,
+      inicial.loteAtual,
+      inicial.gravados,
+      gravarLoteAction,
+      (loteAtual, gravados) => setFase({ ...inicial, loteAtual, gravados }),
+    )
+    if (!resultado.ok) {
+      unstable_rethrow(resultado.excecao)
+      setFase({
+        ...inicial,
+        tipo: 'erro-gravacao',
+        loteAtual: resultado.loteAtual,
+        gravados: resultado.gravados,
+        erro: resultado.erro,
+      })
+      return
     }
-    setFase({ tipo: 'relatorio', resultado: inicial.resultado, jaImportados: inicial.jaImportados, gravados: gravadosTotal })
+    setFase({ tipo: 'relatorio', resultado: inicial.resultado, jaImportados: inicial.jaImportados, gravados: resultado.gravados })
   }
 
   function confirmarGravacao(resultado: ResultadoDaTraducao, jaImportados: Set<number>) {
@@ -163,7 +138,13 @@ export function Assistente() {
   function retomar(estadoComErro: Extract<Fase, { tipo: 'erro-gravacao' }>) {
     // Sempre do lote 1, nunca do que falhou (brief) — seguro porque gravarLoteAction é
     // idempotente: os lotes que já entraram são reenviados e não fazem nada na 2ª vez.
-    const proxima: Extract<Fase, { tipo: 'gravando' }> = { ...estadoComErro, tipo: 'gravando', loteAtual: 0, gravados: 0 }
+    //
+    // NÃO zera `gravados`: gravarLote devolve só as linhas que de fato entraram (.returning()
+    // sobre ON CONFLICT DO NOTHING — src/db/importacao.test.ts:218-238 fixa isso), então os
+    // lotes já gravados na 1ª tentativa devolvem 0 ao ser reenviados. gravarEmSequencia soma
+    // esse 0 sobre `jaGravados` (aqui, o total já confirmado antes da falha) — zerar aqui
+    // faria o relatório final "esquecer" tudo que tinha entrado antes do lote que falhou.
+    const proxima: Extract<Fase, { tipo: 'gravando' }> = { ...estadoComErro, tipo: 'gravando', loteAtual: 0 }
     setFase(proxima)
     void gravarLotes(proxima)
   }
@@ -233,7 +214,6 @@ export function Assistente() {
           problemas={fase.resultado.problemas}
           avisos={fase.resultado.avisos}
           estadoDesfazer={estadoDesfazer}
-          quantidadeConhecidaParaDesfazer={fase.jaImportados.size + fase.gravados}
           aoConfirmarDesfazer={confirmarDesfazer}
         />
       )}

@@ -1,11 +1,10 @@
 'use client'
 
 // Peças de apresentação do assistente de importação — cada uma recebe o que precisa por
-// props (nunca chama Server Action nem sabe o que é sessão), justamente para poder ser
-// desenhada em qualquer lugar: dentro de assistente.tsx (Tarefa 11) OU na vitrine de
-// src/app/importar-preview/, que reúne todos os estados numa página só para quem tiver uma
-// sessão (essa rota NÃO é pública — o proxy protege por path, não por grupo de rotas; ver o
-// comentário no topo de importar-preview/page.tsx e a seção correspondente do relatório).
+// props (nunca chama Server Action nem sabe o que é sessão). Testadas em componentes.test.tsx
+// com renderToStaticMarkup (react-dom/server), que roda no ambiente 'node' do Vitest sem
+// dependência nova — ver a Rodada de correção 1 do relatório da Tarefa 11 para o porquê de
+// não ser mais uma vitrine em rota própria (src/app/importar-preview/, removida).
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
@@ -140,11 +139,7 @@ export function TelaEscolher(props: {
     <div className="flex flex-col gap-4">
       <AvisoAntesDeComecar />
       <SeletorDeArquivo erro={props.erro} aoEscolher={props.aoEscolherArquivo} />
-      <PainelDesfazer
-        quantidadeConhecida={null}
-        estado={props.estadoDesfazer}
-        aoConfirmar={props.aoConfirmarDesfazer}
-      />
+      <PainelDesfazer estado={props.estadoDesfazer} aoConfirmar={props.aoConfirmarDesfazer} />
     </div>
   )
 }
@@ -223,7 +218,14 @@ export function ListaDeOcorrencias(props: {
         ))}
       </ul>
       {props.itens.length > LIMITE && (
-        <Button type="button" variant="ghost" size="sm" className="mt-2 min-h-11" onClick={() => setExpandido((v) => !v)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mt-2 min-h-11"
+          aria-expanded={expandido}
+          onClick={() => setExpandido((v) => !v)}
+        >
           {expandido ? 'Mostrar menos' : `Mostrar todas as ${formatarNumero(props.itens.length)} linhas`}
         </Button>
       )}
@@ -277,23 +279,36 @@ export function TelaRevisao(props: {
 /** Etapa 3, em andamento. `role="status"` já embute aria-live="polite" e aria-atomic="true"
  *  por padrão (WAI-ARIA); deixamos os dois explícitos porque é o que o brief pede e porque
  *  a busca "progress bar live region status" da skill ui-ux-pro-max (domínio ux) recomenda
- *  UMA mensagem de status atômica por mudança, nunca um número solto anunciado sozinho. */
+ *  UMA mensagem de status atômica por mudança, nunca um número solto anunciado sozinho.
+ *
+ *  A região viva cobre só o `<p>` de status e o `<progress>` — o aviso "não feche" é texto
+ *  ESTÁTICO (não muda lote a lote) e fica FORA dela. Com aria-atomic="true" na Rodada 1 ele
+ *  estava dentro: cada um dos ~10 lotes reanunciava a frase inteira de novo, sem nada de novo
+ *  para o dono ouvir ali. */
 export function TelaGravando(props: { loteAtual: number; totalLotes: number; gravados: number }) {
+  // loteAtual conta LOTES CONCLUÍDOS (0 no primeiro quadro, antes de qualquer resposta
+  // chegar) — certo para a barra (o preenchimento começa vazio), errado para o texto: "Lote 0
+  // de 10" no primeiro instante, e a barra nunca mostraria "Lote 10 de 10" com o 10º ainda em
+  // voo. O texto soma 1 (sem passar de totalLotes) para descrever o lote EM CURSO, não os já
+  // terminados.
+  const loteEmCurso = Math.min(props.loteAtual + 1, props.totalLotes)
   return (
-    <div role="status" aria-live="polite" aria-atomic="true" className="flex flex-col gap-3 rounded-md border p-4">
-      <p className="text-sm font-medium tabular-nums">
-        Lote {props.loteAtual} de {props.totalLotes} · {formatarNumero(props.gravados)} gravados
-      </p>
-      {/* <progress> já expõe role="progressbar" e aria-valuenow/min/max sozinho a partir de
-          value/max — não precisa de ARIA manual por cima. Só o NOME acessível não vem de
-          graça (não há <label for> para um elemento de progresso): sem aria-label, um leitor
-          de tela anunciaria só "progressbar, 40%", sem dizer do que. */}
-      <progress
-        value={props.loteAtual}
-        max={props.totalLotes}
-        aria-label="Progresso da gravação dos lançamentos"
-        className="h-2 w-full accent-primary"
-      />
+    <div className="flex flex-col gap-3 rounded-md border p-4">
+      <div role="status" aria-live="polite" aria-atomic="true" className="flex flex-col gap-3">
+        <p className="text-sm font-medium tabular-nums">
+          Lote {loteEmCurso} de {props.totalLotes} · {formatarNumero(props.gravados)} gravados
+        </p>
+        {/* <progress> já expõe role="progressbar" e aria-valuenow/min/max sozinho a partir de
+            value/max — não precisa de ARIA manual por cima. Só o NOME acessível não vem de
+            graça (não há <label for> para um elemento de progresso): sem aria-label, um
+            leitor de tela anunciaria só "progressbar, 40%", sem dizer do que. */}
+        <progress
+          value={props.loteAtual}
+          max={props.totalLotes}
+          aria-label="Progresso da gravação dos lançamentos"
+          className="h-2 w-full accent-primary"
+        />
+      </div>
       <p className="text-xs text-muted-foreground">Não feche nem saia desta página até terminar.</p>
     </div>
   )
@@ -333,7 +348,6 @@ export function TelaRelatorio(props: {
   problemas: OcorrenciaDaPlanilha[]
   avisos: OcorrenciaDaPlanilha[]
   estadoDesfazer: EstadoDesfazer
-  quantidadeConhecidaParaDesfazer: number
   aoConfirmarDesfazer: () => void
 }) {
   return (
@@ -352,30 +366,34 @@ export function TelaRelatorio(props: {
       <Link href="/lancamentos" className={cn(buttonVariants({ variant: 'default' }), 'min-h-11')}>
         Ver lançamentos
       </Link>
-      <PainelDesfazer
-        quantidadeConhecida={props.quantidadeConhecidaParaDesfazer}
-        estado={props.estadoDesfazer}
-        aoConfirmar={props.aoConfirmarDesfazer}
-      />
+      <PainelDesfazer estado={props.estadoDesfazer} aoConfirmar={props.aoConfirmarDesfazer} />
     </div>
   )
 }
 
 /**
  * Entrada discreta (brief, Passo 3): nunca ao lado do botão de gravar, sempre depois de um
- * divisor. Aparece em dois lugares — TelaEscolher (`quantidadeConhecida = null`, porque
- * nada foi lido ainda nesta sessão) e TelaRelatorio (número = jaImportados + gravados desta
- * sessão, a melhor conta disponível SEM criar uma consulta nova, que é regra de negócio e
- * não é deste papel: ver "Desfazer: de onde vem o número" no relatório da tarefa). Nos dois
- * casos o resultado real, depois de confirmar, é sempre o `apagados` que desfazerAction
- * devolve — nunca o número anunciado antes do clique.
+ * divisor. Aparece em dois lugares — TelaEscolher e TelaRelatorio — e não anuncia um número
+ * antes de confirmar. A 1ª rodada desta tarefa tentou estimar (`jaImportados.size + gravados`
+ * desta sessão) só na etapa 4; a revisão apontou dois jeitos previsíveis de errar mesmo assim:
+ * depois de uma retomada (o total já muda de sentido — ver a correção em `assistente.tsx`,
+ * `retomar`) e sempre que uma importação ANTERIOR tiver deixado linhas de fora da planilha
+ * atual, porque `desfazerAction` apaga TODO `fonte = 'planilha'`, não só o que esta sessão
+ * viu. Criar a consulta que daria o número exato é mexer em `src/db/importacao.ts` — fora
+ * deste papel (é "consulta", explicitamente do Cérebro). Por isso: mesmo texto honesto nos
+ * dois lugares, sem número prometido; o resultado real (`apagados`, devolvido por
+ * `desfazerAction`) só aparece DEPOIS de confirmar, e nunca precisa bater com uma promessa
+ * anterior porque não há promessa.
  */
 export function PainelDesfazer(props: {
-  quantidadeConhecida: number | null
   estado: EstadoDesfazer
   aoConfirmar: () => void
+  // Só para abrir o painel já expandido num render estático (componentes.test.tsx não simula
+  // clique — renderToStaticMarkup não tem DOM nem evento). Produção nunca passa isto: todo
+  // painel começa fechado, como o brief pede ("fora do caminho feliz").
+  abertoInicial?: boolean
 }) {
-  const [aberto, setAberto] = useState(false)
+  const [aberto, setAberto] = useState(props.abertoInicial ?? false)
   const [digitado, setDigitado] = useState('')
   const liberado = digitado === 'APAGAR'
   const apagando = props.estado.tipo === 'apagando'
@@ -413,11 +431,7 @@ export function PainelDesfazer(props: {
         anterior. Lançamentos que você lançou à mão, ou que vieram de fatura ou de virada de mês, não são
         afetados.
       </p>
-      <p className="text-sm">
-        {props.quantidadeConhecida !== null
-          ? `Você está prestes a apagar ${formatarNumero(props.quantidadeConhecida)} lançamentos.`
-          : 'Sem um arquivo escolhido nesta sessão não dá para saber o número exato antes de confirmar — ele aparece logo depois.'}
-      </p>
+      <p className="text-sm">Não dá para saber o número exato antes de confirmar — ele aparece logo depois.</p>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="confirmar-apagar">Para confirmar, digite APAGAR</Label>
@@ -449,11 +463,7 @@ export function PainelDesfazer(props: {
           disabled={!liberado || apagando}
           onClick={props.aoConfirmar}
         >
-          {apagando
-            ? 'Apagando…'
-            : props.quantidadeConhecida !== null
-              ? `Apagar ${formatarNumero(props.quantidadeConhecida)} lançamentos`
-              : 'Apagar os lançamentos importados'}
+          {apagando ? 'Apagando…' : 'Apagar os lançamentos importados'}
         </Button>
         <Button
           type="button"

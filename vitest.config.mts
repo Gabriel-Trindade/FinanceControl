@@ -8,6 +8,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
+    // .test.tsx (Rodada de correção 1 da Tarefa 11): renderToStaticMarkup precisa de JSX.
+    // O esbuild do Vite já transforma .tsx sozinho (lê o "jsx": "react-jsx" do tsconfig.json)
+    // — não precisou de @vitejs/plugin-react nem de environment 'jsdom' para isto.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tests/**/*.test.ts'],
   },
 })
