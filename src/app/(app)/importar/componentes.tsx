@@ -226,7 +226,10 @@ export function ListaDeOcorrencias(props: {
           aria-expanded={expandido}
           onClick={() => setExpandido((v) => !v)}
         >
-          {expandido ? 'Mostrar menos' : `Mostrar todas as ${formatarNumero(props.itens.length)} linhas`}
+          {/* "ocorrências", não "linhas": um aviso conta ocorrências, não linhas distintas — uma
+              linha com valor de três casas E SUBTOTAL divergente gera dois avisos e seria contada
+              duas vezes. "linhas" prometeria um número que a lista não entrega. */}
+          {expandido ? 'Mostrar menos' : `Mostrar todas as ${formatarNumero(props.itens.length)} ocorrências`}
         </Button>
       )}
     </section>

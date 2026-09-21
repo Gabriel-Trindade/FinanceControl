@@ -159,7 +159,11 @@ describe('ListaDeOcorrencias', () => {
   it('com mais de 15 itens, mostra só 15 e o botão para expandir, com aria-expanded="false"', () => {
     const muitos = Array.from({ length: 22 }, (_, i) => ({ linha: 100 + i, motivo: 'ITEM vazio' }))
     const html = renderToStaticMarkup(<ListaDeOcorrencias titulo="Problemas" tom="problema" itens={muitos} />)
-    expect(html).toContain('Mostrar todas as 22 linhas')
+    // "ocorrências", não "linhas": um aviso conta OCORRÊNCIAS, não linhas distintas — uma
+    // linha com valor de três casas E SUBTOTAL divergente gera dois avisos (achado da
+    // revisão final do branch). "linhas" prometia um número que a lista não entrega.
+    expect(html).toContain('Mostrar todas as 22 ocorrências')
+    expect(html).not.toContain('linhas')
     expect(html).toContain('aria-expanded="false"')
     expect(html.match(/Linha \d+:/g)).toHaveLength(15)
   })
