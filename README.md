@@ -100,6 +100,14 @@ Isso **apaga só** os lançamentos que vieram da planilha — lançamentos digit
 
 Depois de desfazer, você pode importar a planilha de novo quando quiser.
 
+### Corrigir valores importados
+
+Cada linha é reconhecida pelo **CÓD** da planilha. Se você reimportar o arquivo depois de corrigir um valor no Excel, o sistema dirá "0 gravados" — está certo. Ele vê o `CÓD`, reconhece que já existe, e não toca na linha.
+
+Isso é intencional: protege qualquer ação feita no app. Se você marcasse um lançamento como "recebido" e depois reimportasse a planilha, sem essa proteção o sistema apagaria seu trabalho. Reenviar é aditivo — só acrescenta o que nunca viu.
+
+**Para valer uma correção feita no Excel:** desfaça a importação (veja acima) e importe de novo.
+
 ### Testar no celular (sem subir para produção)
 
 Se quer testar o app no seu telefone enquanto desenvolve localmente:
