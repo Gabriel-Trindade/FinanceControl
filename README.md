@@ -59,6 +59,57 @@ O `.env.local` nunca vai para o git.
 Produção na Vercel, com banco Neon (branch `main`). O passo a passo está na Tarefa 11 de
 `docs/superpowers/plans/2026-09-14-nucleo-plano-1.md`.
 
+## Importação da planilha
+
+A rota `/importar` permite enviar o arquivo `USO_CARTÃO.xlsx` para migrar o histórico de gastos para o app.
+O arquivo é lido **no seu aparelho** — nunca sobe para o servidor.
+
+### Como importar
+
+1. Abra `/importar`
+2. Clique em "Escolher arquivo .xlsx" e selecione o `USO_CARTÃO.xlsx`
+3. O sistema lê o arquivo e confere quantas linhas já foram importadas — você vê um resumo antes de gravar
+4. Revise problemas e avisos (se houver), depois clique "Gravar"
+5. Veja o progresso enquanto os lançamentos entram — não feche a página
+6. Ao terminar, confira o relatório com o que entrou e o que foi ignorado
+
+### As quatro etapas
+
+**Etapa 1: Escolher** — onde você seleciona o arquivo e vê a opção de desfazer (se houver uma importação anterior).
+
+**Etapa 2: Conferir** — o sistema conta:
+- Linhas lidas na aba GASTOS
+- Quantas são novas (nunca viram antes)
+- Quantas já foram importadas em outro dia
+- Quantas têm problema (data errada, valor faltando, etc.)
+
+Se houver problemas, a lista mostra o número da linha e por que não vai entrar. Avisos (como valores com muitas casas decimais) não bloqueiam a importação — a linha entra mesmo assim, com observação no relatório final.
+
+**Etapa 3: Gravar** — mostra o progresso com uma barra. Os lançamentos entram em lotes de 500 de cada vez. Não feche nem saia da página.
+
+**Etapa 4: Relatório** — resume tudo: quantos entraram, qual foi arredondado, qual foi ignorado. Há um atalho para voltar à lista de lançamentos.
+
+### Desfazer uma importação
+
+Em qualquer tela de importação, há um botão "Desfazer importação" (escondido por padrão, em baixo). Clique nele para expandir:
+
+1. Digite `APAGAR` em maiúsculas para liberar o botão
+2. Clique "Apagar os lançamentos importados"
+
+Isso **apaga só** os lançamentos que vieram da planilha — lançamentos digitados à mão, de fatura ou de virada de mês não são afetados.
+
+Depois de desfazer, você pode importar a planilha de novo quando quiser.
+
+### Testar no celular (sem subir para produção)
+
+Se quer testar o app no seu telefone enquanto desenvolve localmente:
+
+```bash
+npm run dev -- --hostname 0.0.0.0
+```
+
+Depois, no navegador do celular, acesse o IP do seu computador (ex.: `http://192.168.1.10:3000`), na mesma rede Wi-Fi.
+
 ## Privacidade
 
 - Repositório privado.
