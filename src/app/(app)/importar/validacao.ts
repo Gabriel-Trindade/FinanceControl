@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { NOME_MAXIMO } from '@/domain/planilha'
 // De @/importacao/lotes, não de @/db/importacao: esse módulo arrastaria o Drizzle e o
 // schema inteiro para o pacote do cliente quando a tela de importação (Tarefa 11)
 // importar TAMANHO_DO_LOTE para fatiar o arquivo antes de mandar cada lote pra cá.
@@ -41,7 +42,12 @@ const codSchema = z
 // requires ... maximum size is 8191") — sem este teto, um nome absurdamente longo (POST
 // forjado, não a planilha real) estouraria isso na hora de obterOuCriarPessoa/Categoria,
 // e não seria um erro por linha, e sim uma exceção no meio da resolução de cadastros.
-const NOME_MAXIMO = 200
+//
+// NOME_MAXIMO vem de @/domain/planilha (importado acima), não é redeclarado aqui: o leitor
+// (src/domain/planilha.ts) já recusa CATEGORIA/ORIGEM acima deste tamanho como problema por
+// linha, antes de o lote chegar aqui. As duas cópias independentes do mesmo número já
+// desalinharam uma vez (achado da revisão final do branch) — uma só evita que desalinhem
+// de novo, o mesmo raciocínio do codSchema compartilhado logo abaixo.
 
 /** Espelha LancamentoDaPlanilha (src/domain/planilha.ts) campo a campo. */
 const lancamentoSchema = z

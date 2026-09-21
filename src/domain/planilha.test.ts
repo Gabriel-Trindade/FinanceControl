@@ -224,8 +224,25 @@ describe('traduzirLinha', () => {
     ['PARCELA ATUAL 0 com QTD PARCELAS 0', { 7: 0, 8: 0 }],
     ['PARCELA ATUAL acima de smallint', { 7: 40000, 8: 40000 }],
     ['PAGO? com valor estranho', { 12: 'TALVEZ' }],
+    ['CATEGORIA acima do limite de 200 caracteres', { 4: 'A'.repeat(201) }],
+    ['ORIGEM acima do limite de 200 caracteres', { 11: 'A'.repeat(201) }],
   ])('recusa: %s', (_nome, mudancas) => {
     expect(traduzirLinha(linha(mudancas)).ok).toBe(false)
+  })
+
+  // Achado da revisão final do branch: o leitor não tinha limite nenhum para CATEGORIA/ORIGEM,
+  // enquanto o validador do lote (src/app/(app)/importar/validacao.ts) já recusava acima de 200
+  // caracteres — uma planilha com um nome muito longo passava pela conferência mostrando "0
+  // problemas" e só morria no gravarLoteAction, derrubando o lote de 500 sem dizer qual linha.
+  // Os dois limites (200) precisam ser exatamente o mesmo número — daí o teste de fronteira
+  // abaixo, além dos dois casos "recusa: %s" acima (201 é problema).
+  it('aceita CATEGORIA e ORIGEM com exatamente 200 caracteres (o limite, não acima dele)', () => {
+    const nome200 = 'A'.repeat(200)
+    const r = traduzirLinha(linha({ 4: nome200, 11: nome200 }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.lancamento.categoria).toBe(nome200)
+    expect(r.lancamento.pessoa).toBe(nome200)
   })
 })
 

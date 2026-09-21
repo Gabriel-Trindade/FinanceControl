@@ -68,6 +68,13 @@ const INFINITO = String.fromCharCode(0x221e)
 // guarda custa uma linha e a razão de existir é idêntica à do smallint.
 const MAX_INTEGER = 2147483647
 
+// Mesmo teto de NOME_MAXIMO em src/app/(app)/importar/validacao.ts — exportada e importada
+// lá, não duplicada. Antes eram duas cópias desalinhadas (o validador tinha .max(200), o
+// leitor não tinha limite nenhum): uma CATEGORIA/ORIGEM longa passava por aqui mostrando "0
+// problemas" na tela de conferência e só morria no gravarLoteAction, com uma mensagem que não
+// dizia qual linha — derrubando o lote inteiro de 500. Achado da revisão final do branch.
+export const NOME_MAXIMO = 200
+
 // Uma frase por motivo, escrita antes da implementação (o dono lê este texto na
 // tela de conferência). A ORDEM é a da spec §6.4: quando uma linha tem dois
 // defeitos, vence o primeiro da lista, e traduzirLinha checa nesta sequência.
@@ -79,7 +86,9 @@ const MOTIVO = {
   valor: 'VALOR ausente ou não numérico',
   valorAcimaDoLimite: `VALOR acima do limite do banco em centavos (máximo ${MAX_INTEGER})`,
   categoria: 'CATEGORIA vazia',
+  categoriaAcimaDoLimite: `CATEGORIA acima do limite de ${NOME_MAXIMO} caracteres`,
   origem: 'ORIGEM vazia',
+  origemAcimaDoLimite: `ORIGEM acima do limite de ${NOME_MAXIMO} caracteres`,
   parcelaAtual: 'PARCELA ATUAL ausente, não numérica ou negativa',
   qtdParcelas: `QTD PARCELAS vazia ou não numérica (nem número nem ${INFINITO})`,
   qtdMenorQueParcelaAtual: 'QTD PARCELAS menor que PARCELA ATUAL',
@@ -171,8 +180,10 @@ export function traduzirLinha(celulas: Celula[]): TraducaoDeLinha {
   // spec §6.8), com a guarda de tipo aqui porque a célula pode não ser string.
   const categoria = typeof celulas[4] === 'string' ? normalizarNome(celulas[4]) : ''
   if (!categoria) return problema(MOTIVO.categoria)
+  if (categoria.length > NOME_MAXIMO) return problema(MOTIVO.categoriaAcimaDoLimite)
   const pessoa = typeof celulas[11] === 'string' ? normalizarNome(celulas[11]) : ''
   if (!pessoa) return problema(MOTIVO.origem)
+  if (pessoa.length > NOME_MAXIMO) return problema(MOTIVO.origemAcimaDoLimite)
 
   const parcelaAtualBruta = celulaParaInteiro(celulas[7])
   if (parcelaAtualBruta === null || parcelaAtualBruta < 0) return problema(MOTIVO.parcelaAtual)
