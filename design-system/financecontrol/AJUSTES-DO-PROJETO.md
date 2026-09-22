@@ -37,7 +37,24 @@ espelhada com o mesmo contraste (mínimo 4.5:1 para texto). Onde o MASTER lista 
 os tokens que o shadcn já criou em `src/app/globals.css` (formato `oklch`) — mapeie por **papel**
 (`--background`, `--card`, `--primary`, `--destructive`…), não copiando hex.
 
-O MASTER proíbe "fundo branco puro": no tema claro, use um branco levemente quebrado como superfície.
+**Decisão do projeto, não do MASTER:** no tema claro, a superfície devia ser um branco levemente
+quebrado, não branco puro. Versões anteriores deste arquivo diziam que "o MASTER proíbe fundo branco
+puro" — **isso é falso**. O `MASTER.md` não tem essa regra em lugar nenhum; os anti-patterns dele são
+só "Light mode default" e "Slow rendering", e ele próprio usa `background: white` no modal
+(`MASTER.md:157`) e `color: white` no botão primário (`:86`). A preferência é do projeto, e quem
+quiser reabri-la só precisa convencer o dono.
+
+**O estado de hoje é branco puro** (`--background: oklch(1 0 0)`, herdado do `create-next-app`), e
+mudar isso **não é ajuste de uma linha**:
+
+- `--background`, `--card` e `--popover` são o mesmo branco: mexer num mexe nas três, e em toda tela.
+- Todo o orçamento de contraste dos tokens de `globals.css` foi calibrado contra branco puro, e a
+  folga é pequena. Medido: `--chart-2` dá 4.76:1 hoje, 4.56:1 com `oklch(0.985)` e **reprova**
+  (4.48:1) já em `oklch(0.98)`.
+
+Ou seja: **quem trocar o fundo refaz obrigatoriamente a tabela de contraste inteira do `globals.css`.**
+Isso precisa estar escrito na descrição da tarefa que fizer a troca, não num comentário. E vale fazer
+cedo: cada tela nova calibrada contra branco puro aumenta o retrabalho.
 
 ## 4. Sombra pesa pouco, borda pesa menos
 

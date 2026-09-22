@@ -1,14 +1,14 @@
 import { eq, sql } from 'drizzle-orm'
-import { compararNomes } from '@/domain/texto'
+import { compararNomes, normalizarNome } from '@/domain/texto'
 import { categorias, pessoas } from './schema'
 import type { Db } from './tipos'
 
 export type ItemCadastro = { id: number; nome: string }
 
-/** "  Ana   Maria " → "Ana Maria". */
-export function normalizarNome(nome: string): string {
-  return nome.trim().replace(/\s+/g, ' ')
-}
+// Reexportado: a função vive em src/domain/texto.ts (spec §6.8, é a mesma usada pela
+// tradução da planilha), mas outros arquivos deste projeto importam normalizarNome
+// daqui — o caminho antigo continua funcionando.
+export { normalizarNome }
 
 /** Pessoas que aparecem nas listas de escolha, em ordem alfabética. */
 export async function listarPessoasAtivas(db: Db): Promise<ItemCadastro[]> {

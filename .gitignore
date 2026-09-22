@@ -22,6 +22,7 @@ dados-reais/
 # Espaço de trabalho do Superpowers (ledger, briefs, relatórios) e worktrees
 .superpowers/
 .worktrees/
+.claude/worktrees/
 
 # Vercel, logs e sistema
 .vercel/

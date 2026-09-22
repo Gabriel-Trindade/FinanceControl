@@ -147,7 +147,7 @@ Vitest. O hash de senha usa o `crypto.scrypt` nativo do Node, sem biblioteca ext
 
 | Coluna | Tipo | Na planilha | Regra |
 |---|---|---|---|
-| `id` | integer identity (by default) | CÓD | mantém 1–4805 na migração; novos seguem a sequência |
+| `id` | integer identity (by default) | CÓD | mantém 1–4805 na migração; novos seguem a sequência. **Substituído pela decisão D12** (spec [`2026-09-16-planilha-primeiro-design.md`](2026-09-16-planilha-primeiro-design.md), §3.1): o `CÓD` não vai para `id` — vira `cod_planilha`, coluna separada e anulável |
 | `mes_fatura` | date | VENCIMENTO | obrigatório; `CHECK` dia = 1 |
 | `data_compra` | date | — | opcional |
 | `pessoa_id` | integer → `pessoas` | ORIGEM | obrigatório; `ON DELETE RESTRICT` |
@@ -329,6 +329,7 @@ Server Actions ficam finas; a lógica que importa é testada em `domain`, `db` e
 **Sub-projeto 2 — Migração da planilha**
 - Script `scripts/migrar-planilha.ts`, rodado localmente, lendo o `.xlsx` fora do repositório.
 - Mapeamento: VENCIMENTO → `mes_fatura` (dia 1) · `∞` → `recorrente` · vazio → `NAO` · VALOR arredondado para centavos · CÓD → `id` (depois ajustar a sequência de identidade) · `fonte = planilha`.
+  **Substituído pela decisão D12** (spec [`2026-09-16-planilha-primeiro-design.md`](2026-09-16-planilha-primeiro-design.md), §3.1): `CÓD` não vai para `id` — vira `cod_planilha`, coluna separada e anulável; sem sequência de identidade para ajustar.
 - Relatório de conferência: valores arredondados, as 4 linhas com SUBTOTAL manual, SITUAÇÃO recalculada × cache, possíveis `parcela_atual = 0` em recorrentes.
 - O Núcleo já deixa pronto: `id` aceitando valor explícito, `fonte` e as funções de `domain`.
 
